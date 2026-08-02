@@ -1,0 +1,16 @@
+name: json_codable
+description: JSON parsing, validation, and schema generation.
+version: 0.1.0
+repository: https://github.com/iv-re/dart-json-codable
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  meta: ^1.12.0
+  equatable: ^2.1.0
+  json_schema_builder: ^0.1.6
+
+dev_dependencies:
+  pusk_lints: ^1.0.0
+  test: ^1.25.6
