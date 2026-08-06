@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:json_codable/json_codable.dart';
 import 'package:test/test.dart';
 
@@ -14,7 +16,7 @@ void main() {
         ),
       );
 
-      final json = errors.toJson();
+      final json = errors.toMap();
       expect(json, {
         'email': [
           {
@@ -36,7 +38,7 @@ void main() {
       final parentErrors = ValidationErrors();
       parentErrors.addNested('address', ValidationErrorsObject(childErrors));
 
-      final json = parentErrors.toJson();
+      final json = parentErrors.toMap();
       expect(json, {
         'address': {
           'zip': [
@@ -59,7 +61,7 @@ void main() {
         ValidationErrorsList({0: itemErrors}),
       );
 
-      final json = parentErrors.toJson();
+      final json = parentErrors.toMap();
       expect(json, {
         'items': {
           '0': {
@@ -69,6 +71,22 @@ void main() {
           },
         },
       });
+    });
+
+    test('serializes ValidationErrors with JsonWriter', () {
+      final errors = ValidationErrors();
+      errors.add(
+        'email',
+        const ValidationError(
+          code: 'email',
+          message: 'Invalid email address',
+          params: {'value': 'invalid'},
+        ),
+      );
+
+      final jsonString = utf8.decode(JsonWriter.encode(errors.toJson));
+      final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
+      expect(decoded.containsKey('email'), isTrue);
     });
 
     test('ValidationErrors.add throws assert on conflict', () {

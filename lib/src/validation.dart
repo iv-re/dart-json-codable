@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:json_codable/src/json/json.dart';
+import 'package:json_codable/src/json/writer.dart';
 import 'package:meta/meta.dart';
 
 @immutable
@@ -47,7 +48,30 @@ class ValidationError extends Equatable implements ToJson {
   final Map<String, Object?> params;
 
   @override
-  Map<String, Object?> toJson() => {
+  void toJson(JsonWriter writer) {
+    writer.string('code', code);
+    if (message != null) writer.string('message', message);
+    if (params.isNotEmpty) {
+      writer.object('params', (w) {
+        for (final entry in params.entries) {
+          final val = entry.value;
+          if (val is String) {
+            w.string(entry.key, val);
+          } else if (val is int) {
+            w.integer(entry.key, val);
+          } else if (val is double) {
+            w.float(entry.key, val);
+          } else if (val is bool) {
+            w.boolean(entry.key, val);
+          } else if (val != null) {
+            w.string(entry.key, val.toString());
+          }
+        }
+      });
+    }
+  }
+
+  Map<String, Object?> toMap() => {
     'code': code,
     if (message != null) 'message': message,
     if (params.isNotEmpty) 'params': params,
@@ -138,23 +162,45 @@ class ValidationErrors implements Exception, ToJson {
   bool get isNotEmpty => errors.isNotEmpty;
 
   @override
-  Map<String, Object?> toJson() {
+  void toJson(JsonWriter writer) {
+    for (final entry in errors.entries) {
+      final key = entry.key;
+      switch (entry.value) {
+        case ValidationErrorsField(:final errors):
+          writer.list<ValidationError>(
+            key,
+            errors,
+            mapper: (w, err) => err.toJson(w),
+          );
+        case ValidationErrorsObject(:final errors):
+          writer.object(key, errors.toJson);
+        case ValidationErrorsList(:final errors):
+          writer.object(key, (w) {
+            for (final subEntry in errors.entries) {
+              w.object(subEntry.key.toString(), subEntry.value.toJson);
+            }
+          });
+      }
+    }
+  }
+
+  Map<String, Object?> toMap() {
     return {
       for (final entry in errors.entries)
         entry.key: switch (entry.value) {
           ValidationErrorsField(:final errors) =>
-            errors.map((e) => e.toJson()).toList(),
-          ValidationErrorsObject(:final errors) => errors.toJson(),
+            errors.map((e) => e.toMap()).toList(),
+          ValidationErrorsObject(:final errors) => errors.toMap(),
           ValidationErrorsList(:final errors) => {
             for (final entry in errors.entries)
-              entry.key.toString(): entry.value.toJson(),
+              entry.key.toString(): entry.value.toMap(),
           },
         },
     };
   }
 
   @override
-  String toString() => 'ValidationErrors(${toJson()})';
+  String toString() => 'ValidationErrors(${toMap()})';
 }
 
 /// Extension on List of ValidationRule for concise field validation.

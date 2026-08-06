@@ -1,6 +1,6 @@
 # json_codable
 
-JSON parsing, validation, and schema generation.
+JSON parsing, validation, serialization, and schema generation.
 
 ## Usage
 
@@ -9,7 +9,6 @@ JSON parsing, validation, and schema generation.
 `JsonObject` supports two parsing modes: **Accumulated Validation** (`json.parse`) and **Fail-Fast** (direct constructor).
 
 ```dart
-import 'dart:convert';
 import 'package:json_codable/json_codable.dart';
 
 class CreateUserDto {
@@ -24,8 +23,7 @@ class CreateUserDto {
 }
 
 final jsonString = '{"name": "A", "email": "invalid"}';
-final jsonMap = jsonDecode(jsonString) as Map<String, Object?>;
-final json = JsonObject(jsonMap);
+final json = JsonObject.fromString(jsonString);
 
 // Accumulated Validation: collects ALL field errors before throwing
 try {
@@ -42,9 +40,9 @@ try {
 }
 ```
 
-### Serialization (`ToJson`)
+### Serialization (`ToJson` & `JsonWriter`)
 
-Implement `ToJson` for DTOs and models that export to JSON maps:
+Implement `ToJson` for DTOs and models to serialize directly to `JsonWriter` (UTF-8 bytes):
 
 ```dart
 class UserDto implements ToJson {
@@ -54,16 +52,25 @@ class UserDto implements ToJson {
   final String name;
 
   @override
-  Map<String, Object?> toJson() => {
-    'id': id,
-    'name': name,
-  };
+  void toJson(JsonWriter writer) {
+    writer.string('id', id);
+    writer.string('name', name);
+  }
 }
+
+// Encode root object to Uint8List bytes
+final bytes = JsonWriter.encode(user.toJson);
+
+// Encode list of objects to Uint8List bytes
+final listBytes = JsonWriter.encodeList(
+  users,
+  mapper: (w, item) => item.toJson(w),
+);
 ```
 
 ### Schema Generation
 
-Generate JSON Schema documents directly from `fromJson` mappers or builder callbacks:
+Generate JSON Schema documents directly from `fromJson` mappers:
 
 ```dart
 class CreateUserDto {

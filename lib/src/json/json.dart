@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:json_codable/src/json/reader.dart';
+import 'package:json_codable/src/json/writer.dart';
 import 'package:json_codable/src/validation.dart';
 import 'package:json_schema_builder/json_schema_builder.dart'
     hide ValidationError;
@@ -8,14 +13,32 @@ part 'schema.dart';
 
 /// Interface for objects that can be serialized to JSON.
 abstract interface class ToJson {
-  /// Converts this object to a JSON-encodable map.
-  Map<String, Object?> toJson();
+  /// Writes this object's fields to [writer].
+  void toJson(JsonWriter writer);
 }
 
-/// A strongly-typed wrapper around a `Map<String, Object?>` for extracting
-/// and validating JSON fields.
+/// A strongly-typed wrapper around a JSON byte reader
+/// for extracting and validating JSON fields.
 abstract interface class JsonObject {
-  const factory JsonObject(Map<String, Object?> map) = _JsonObjectImpl;
+  factory JsonObject(
+    Uint8List bytes, {
+    int offset = 0,
+    int? length,
+  }) {
+    return JsonObject.fromReader(
+      JsonReader(bytes, offset: offset, length: length),
+    );
+  }
+
+  factory JsonObject.fromReader(JsonReader reader) = _JsonObjectImpl;
+
+  factory JsonObject.fromString(String src) {
+    return _JsonObjectImpl.fromString(src);
+  }
+
+  factory JsonObject.fromMap(Map<String, Object?> map) {
+    return _JsonObjectImpl.fromMap(map);
+  }
 
   static Schema schema<T>(
     T Function(JsonObject json) mapper, {

@@ -30,7 +30,12 @@ class UserDto implements ToJson {
   final String email;
 
   @override
-  Map<String, Object?> toJson() => {'id': id, 'name': name, 'email': email};
+  void toJson(JsonWriter writer) {
+    writer
+      ..string('id', id)
+      ..string('name', name)
+      ..string('email', email);
+  }
 }
 
 void main() {
@@ -38,27 +43,27 @@ void main() {
   print(CreateUserDto.schema);
 
   print('\n--- Parsing Valid JSON ---');
-  const validJson = '{"name": "Ivan", "email": "ivan@example.com", "age": 25}';
-  final validMap = jsonDecode(validJson) as Map<String, Object?>;
-  final userPayload = JsonObject(validMap).parse(CreateUserDto.fromJson);
-  print('Parsed user: ${userPayload.name} (${userPayload.email})');
+  final validJson = JsonObject.fromString(
+    '{"name": "Ivan", "email": "ivan@example.com", "age": 25}',
+  ).parse(CreateUserDto.fromJson);
+  print('Parsed user: ${validJson.name} (${validJson.email})');
 
   print('\n--- Serialization ---');
   final userDto = UserDto(
     id: '1',
-    name: userPayload.name,
-    email: userPayload.email,
+    name: validJson.name,
+    email: validJson.email,
   );
-  print('JSON String: ${jsonEncode(userDto.toJson())}');
+  final jsonBytes = JsonWriter.encode(userDto.toJson);
+  print('JSON String: ${utf8.decode(jsonBytes)}');
 
   print('\n--- Validation Errors ---');
-  const invalidJson = '{"name": "A", "email": "not-an-email"}';
-  final invalidMap = jsonDecode(invalidJson) as Map<String, Object?>;
-
   try {
-    JsonObject(invalidMap).parse(CreateUserDto.fromJson);
+    JsonObject.fromString(
+      '{"name": "A", "email": "not-an-email"}',
+    ).parse(CreateUserDto.fromJson);
   } on ValidationErrors catch (errors) {
     print('Validation failed:');
-    print(errors.toJson());
+    print(errors.toMap());
   }
 }
