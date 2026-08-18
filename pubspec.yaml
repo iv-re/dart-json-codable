@@ -1,6 +1,6 @@
 name: json_codable
 description: JSON parsing, validation, and schema generation.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/iv-re/dart-json-codable
 
 environment:
