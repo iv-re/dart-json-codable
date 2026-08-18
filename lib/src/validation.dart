@@ -26,6 +26,15 @@ class ValidationError extends Equatable implements ToJson {
          'actual': _getTypeName(actual),
        };
 
+  /// Factory for constructing a [ValidationError] from a [JsonObject].
+  factory ValidationError.fromJson(JsonObject json) {
+    return ValidationError(
+      code: json.string('code'),
+      message: json.stringOrNull('message'),
+      params: json.mapOrNull<Object?>('params') ?? const {},
+    );
+  }
+
   static String _getTypeName(Object? obj) {
     if (obj == null) return 'null';
     if (obj is String) return 'string';
@@ -62,72 +71,43 @@ class ValidationError extends Equatable implements ToJson {
   List<Object?> get props => [code, message, params];
 }
 
-/// Variant of validation error for a field name.
-sealed class ValidationErrorsKind {
-  const ValidationErrorsKind();
-}
-
-/// Errors for a field holding a scalar or primitive value.
-final class ValidationErrorsField extends ValidationErrorsKind {
-  const ValidationErrorsField(this.errors);
-
-  final List<ValidationError> errors;
-}
-
-/// Errors for a field holding a nested object.
-final class ValidationErrorsObject extends ValidationErrorsKind {
-  const ValidationErrorsObject(this.errors);
-
-  final ValidationErrors errors;
-}
-
-/// Errors for a field holding a list / array of objects.
-/// The map key represents the zero-based index in the array.
-final class ValidationErrorsList extends ValidationErrorsKind {
-  const ValidationErrorsList(this.errors);
-
-  final Map<int, ValidationErrors> errors;
-}
-
 /// Top-level container for validation errors.
 class ValidationErrors implements Exception, ToJson {
-  ValidationErrors([Map<String, ValidationErrorsKind>? errors])
+  ValidationErrors([Map<String, List<ValidationError>>? errors])
     : errors = errors ?? {};
 
-  final Map<String, ValidationErrorsKind> errors;
+  /// Factory for constructing a [ValidationErrors] from a [JsonObject].
+  factory ValidationErrors.fromJson(JsonObject json) {
+    final errors = <String, List<ValidationError>>{};
+    for (final key in json.keys) {
+      errors[key] = json.list<ValidationError>(
+        key,
+        mapper: ValidationError.fromJson,
+      );
+    }
+    return ValidationErrors(errors);
+  }
+
+  final Map<String, List<ValidationError>> errors;
 
   /// Check if a field has an error.
   bool hasError(String field) => errors.containsKey(field);
 
   /// Add a single field validation error.
   void add(String field, ValidationError error) {
-    final existing = errors[field];
-    if (existing != null) {
-      assert(
-        existing is ValidationErrorsField,
-        'Conflict at "$field": cannot add a scalar error because a '
-        'nested error already exists. Did you parse the same field twice?',
-      );
-    }
-    if (existing is ValidationErrorsField) {
-      existing.errors.add(error);
-    } else {
-      errors[field] = ValidationErrorsField([error]);
-    }
+    (errors[field] ??= []).add(error);
   }
 
-  /// Add a nested kind (field, object, list).
-  void addNested(String field, ValidationErrorsKind kind) {
-    final existing = errors[field];
-    if (existing is ValidationErrorsList && kind is ValidationErrorsList) {
-      existing.errors.addAll(kind.errors);
-    } else {
-      assert(
-        existing == null,
-        'Conflict at "$field": cannot add a nested error because a conflicting '
-        'error already exists. Did you parse the same field twice?',
-      );
-      errors[field] = kind;
+  /// Add multiple validation errors for a field.
+  void addAll(String field, Iterable<ValidationError> newErrors) {
+    (errors[field] ??= []).addAll(newErrors);
+  }
+
+  /// Merge another ValidationErrors container with an optional prefix.
+  void merge(ValidationErrors other, [String prefix = '']) {
+    for (final entry in other.errors.entries) {
+      final key = prefix.isEmpty ? entry.key : '$prefix.${entry.key}';
+      (errors[key] ??= []).addAll(entry.value);
     }
   }
 
@@ -141,15 +121,7 @@ class ValidationErrors implements Exception, ToJson {
   Map<String, Object?> toJson() {
     return {
       for (final entry in errors.entries)
-        entry.key: switch (entry.value) {
-          ValidationErrorsField(:final errors) =>
-            errors.map((e) => e.toJson()).toList(),
-          ValidationErrorsObject(:final errors) => errors.toJson(),
-          ValidationErrorsList(:final errors) => {
-            for (final entry in errors.entries)
-              entry.key.toString(): entry.value.toJson(),
-          },
-        },
+        entry.key: entry.value.map((e) => e.toJson()).toList(),
     };
   }
 

@@ -57,6 +57,9 @@ abstract interface class JsonObject {
 
   JsonFieldExtractor get field;
 
+  /// Returns the top-level keys present in the JSON object.
+  Iterable<String> get keys;
+
   bool has(String key);
 
   T parse<T>(T Function(JsonObject json) mapper);

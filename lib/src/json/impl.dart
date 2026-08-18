@@ -14,14 +14,12 @@ class _ValidationContext {
 
   @pragma('vm:prefer-inline')
   void addErrors(String field, List<ValidationError> errorList) {
-    for (final err in errorList) {
-      errors.add(field, err);
-    }
+    errors.addAll(field, errorList);
   }
 
   @pragma('vm:prefer-inline')
-  void addNested(String field, ValidationErrorsKind kind) {
-    errors.addNested(field, kind);
+  void merge(ValidationErrors other, [String prefix = '']) {
+    errors.merge(other, prefix);
   }
 }
 
@@ -32,6 +30,10 @@ class _JsonObjectImpl implements JsonObject {
 
   final Map<String, Object?> _map;
   final _ValidationContext? _ctx;
+
+  /// Returns the top-level keys present in the JSON object.
+  @override
+  Iterable<String> get keys => _map.keys;
 
   /// Checks if the JSON object contains the specified [key].
   ///
@@ -108,7 +110,7 @@ class _JsonObjectImpl implements JsonObject {
         res = mapper(const _DummyJsonObject());
       }
       if (childCtx.errors.isNotEmpty) {
-        ctx.errors.errors.addAll(childCtx.errors.errors);
+        ctx.merge(childCtx.errors);
       }
       return res;
     }
@@ -516,7 +518,7 @@ class _JsonObjectImpl implements JsonObject {
         res = mapper(const _DummyJsonObject());
       }
       if (childCtx.errors.isNotEmpty) {
-        ctx.addNested(key, ValidationErrorsObject(childCtx.errors));
+        ctx.merge(childCtx.errors, key);
       }
       return res;
     }
@@ -524,7 +526,7 @@ class _JsonObjectImpl implements JsonObject {
     try {
       return mapper(_JsonObjectImpl(value));
     } on ValidationErrors catch (e) {
-      throw ValidationErrors()..addNested(key, ValidationErrorsObject(e));
+      throw ValidationErrors()..merge(e, key);
     }
   }
 
@@ -586,15 +588,14 @@ class _JsonObjectImpl implements JsonObject {
             parsedItem = null;
           }
           if (itemCtx.errors.isNotEmpty) {
-            ctx.addNested(key, ValidationErrorsList({i: itemCtx.errors}));
+            ctx.merge(itemCtx.errors, '$key.$i');
             parsedItem = null;
           }
         } else {
           try {
             parsedItem = mapper(_JsonObjectImpl(item));
           } on ValidationErrors catch (e) {
-            throw ValidationErrors()
-              ..addNested(key, ValidationErrorsList({i: e}));
+            throw ValidationErrors()..merge(e, '$key.$i');
           }
         }
       } else {
@@ -692,7 +693,7 @@ class _JsonObjectImpl implements JsonObject {
           parsedItem = null;
         }
         if (itemCtx.errors.isNotEmpty) {
-          mapCtx.addNested(childKey, ValidationErrorsObject(itemCtx.errors));
+          mapCtx.merge(itemCtx.errors, childKey);
           parsedItem = null;
         }
       } else {
@@ -725,10 +726,9 @@ class _JsonObjectImpl implements JsonObject {
 
     if (mapCtx.errors.isNotEmpty) {
       if (ctx != null) {
-        ctx.addNested(key, ValidationErrorsObject(mapCtx.errors));
+        ctx.merge(mapCtx.errors, key);
       } else {
-        throw ValidationErrors()
-          ..addNested(key, ValidationErrorsObject(mapCtx.errors));
+        throw ValidationErrors()..merge(mapCtx.errors, key);
       }
     }
 
@@ -752,10 +752,8 @@ class _JsonObjectImpl implements JsonObject {
 }
 
 bool _isPrimitiveType<T>() =>
-    T == String ||
-    T == int ||
-    T == double ||
-    T == num ||
-    T == bool ||
     T == Object ||
-    T == dynamic;
+    <T>[] is List<String?> ||
+    <T>[] is List<num?> ||
+    <T>[] is List<bool?> ||
+    (null is T && Object() is T);

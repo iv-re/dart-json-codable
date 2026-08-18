@@ -4,6 +4,9 @@ class _DummyJsonObject implements JsonObject {
   const _DummyJsonObject();
 
   @override
+  Iterable<String> get keys => const [];
+
+  @override
   bool has(String key) => false;
 
   @override

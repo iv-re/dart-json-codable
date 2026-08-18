@@ -1,7 +1,8 @@
 // ignore_for_file: avoid_dynamic_calls
 
+import 'package:checks/checks.dart';
 import 'package:json_codable/json_codable.dart';
-import 'package:test/test.dart';
+import 'package:test/scaffolding.dart';
 
 void main() {
   group('JsonObject.schema', () {
@@ -19,39 +20,33 @@ void main() {
         description: 'A basic user',
       );
 
-      expect(schema['title'], 'User');
-      expect(schema['description'], 'A basic user');
-      expect(schema['type'], 'object');
-      expect(
-        schema['required'],
-        unorderedEquals([
-          'id',
-          'name',
-          'isActive',
-          'tag',
-          'score',
-          'createdAt',
-        ]),
-      );
-      expect(
-        schema['properties'].keys,
-        unorderedEquals([
-          'id',
-          'name',
-          'isActive',
-          'tag',
-          'score',
-          'createdAt',
-        ]),
-      );
+      check(schema['title']).equals('User');
+      check(schema['description']).equals('A basic user');
+      check(schema['type']).equals('object');
+      check(schema['required'] as Iterable<Object?>).unorderedEquals([
+        'id',
+        'name',
+        'isActive',
+        'tag',
+        'score',
+        'createdAt',
+      ]);
+      check((schema['properties'] as Map).keys).unorderedEquals([
+        'id',
+        'name',
+        'isActive',
+        'tag',
+        'score',
+        'createdAt',
+      ]);
 
-      expect(schema['properties']['id']['type'], 'integer');
-      expect(schema['properties']['name']['type'], 'string');
-      expect(schema['properties']['isActive']['type'], 'boolean');
-      expect(schema['properties']['tag']['type'], null);
-      expect(schema['properties']['score']['type'], 'number');
-      expect(schema['properties']['createdAt']['type'], 'string');
-      expect(schema['properties']['createdAt']['format'], 'date-time');
+      check(schema['properties']['id']['type']).equals('integer');
+      check(schema['properties']['name']['type']).equals('string');
+      check(schema['properties']['isActive']['type']).equals('boolean');
+      check(schema['properties']['tag']['type']).isNull();
+      check(schema['properties']['score']['type']).equals('number');
+      check(schema['properties']['createdAt']['type']).equals('string');
+      check(schema['properties']['createdAt']['format']).equals('date-time');
     });
 
     test('generates schema with optional fields', () {
@@ -64,18 +59,15 @@ void main() {
         j.dateTimeOrNull('createdAt');
       });
 
-      expect(schema['required'] ?? <String>[], isEmpty);
-      expect(
-        schema['properties'].keys,
-        unorderedEquals([
-          'id',
-          'name',
-          'isActive',
-          'tag',
-          'score',
-          'createdAt',
-        ]),
-      );
+      check((schema['required'] ?? <String>[]) as Iterable).isEmpty();
+      check((schema['properties'] as Map).keys).unorderedEquals([
+        'id',
+        'name',
+        'isActive',
+        'tag',
+        'score',
+        'createdAt',
+      ]);
     });
 
     test('generates schema constraints from validation rules (string)', () {
@@ -94,17 +86,17 @@ void main() {
         j.string('exact', rules: [ValidationRule.length(equal: 5)]);
       });
 
-      expect(schema['properties']['username']['minLength'], 3);
-      expect(schema['properties']['username']['maxLength'], 20);
-      expect(schema['properties']['username']['pattern'], r'^[a-z]+$');
+      check(schema['properties']['username']['minLength']).equals(3);
+      check(schema['properties']['username']['maxLength']).equals(20);
+      check(schema['properties']['username']['pattern']).equals(r'^[a-z]+$');
 
-      expect(schema['properties']['email']['format'], 'email');
-      expect(schema['properties']['url']['format'], 'uri');
-      expect(schema['properties']['ip']['format'], 'ipv4');
-      expect(schema['properties']['ip6']['format'], 'ipv6');
+      check(schema['properties']['email']['format']).equals('email');
+      check(schema['properties']['url']['format']).equals('uri');
+      check(schema['properties']['ip']['format']).equals('ipv4');
+      check(schema['properties']['ip6']['format']).equals('ipv6');
 
-      expect(schema['properties']['exact']['minLength'], 5);
-      expect(schema['properties']['exact']['maxLength'], 5);
+      check(schema['properties']['exact']['minLength']).equals(5);
+      check(schema['properties']['exact']['maxLength']).equals(5);
     });
 
     test('generates schema constraints from validation rules (number)', () {
@@ -118,11 +110,11 @@ void main() {
         );
       });
 
-      expect(schema['properties']['age']['minimum'], 18);
-      expect(schema['properties']['age']['maximum'], 100);
+      check(schema['properties']['age']['minimum']).equals(18);
+      check(schema['properties']['age']['maximum']).equals(100);
 
-      expect(schema['properties']['score']['exclusiveMinimum'], 0);
-      expect(schema['properties']['score']['exclusiveMaximum'], 10);
+      check(schema['properties']['score']['exclusiveMinimum']).equals(0);
+      check(schema['properties']['score']['exclusiveMaximum']).equals(10);
     });
 
     test('generates schema with nested objects', () {
@@ -142,17 +134,21 @@ void main() {
         );
       });
 
-      expect(schema['required'], equals(['address']));
+      check(schema['required'] as List).deepEquals(['address']);
 
       final address = schema['properties']['address'];
-      expect(address['type'], 'object');
-      expect(address['required'], unorderedEquals(['city', 'zip']));
-      expect(address['properties'].keys, unorderedEquals(['city', 'zip']));
+      check(address['type']).equals('object');
+      check(
+        address['required'] as Iterable<Object?>,
+      ).unorderedEquals(['city', 'zip']);
+      check(
+        (address['properties'] as Map).keys,
+      ).unorderedEquals(['city', 'zip']);
 
       final profile = schema['properties']['profile'];
-      expect(profile['type'], 'object');
-      expect(profile['required'], unorderedEquals(['bio']));
-      expect(profile['properties'].keys, unorderedEquals(['bio']));
+      check(profile['type']).equals('object');
+      check(profile['required'] as Iterable<Object?>).unorderedEquals(['bio']);
+      check((profile['properties'] as Map).keys).unorderedEquals(['bio']);
     });
 
     test('generates schema with arrays', () {
@@ -170,20 +166,20 @@ void main() {
         );
       });
 
-      expect(schema['required'], equals(['tags', 'users']));
+      check(schema['required'] as List).deepEquals(['tags', 'users']);
 
       final tags = schema['properties']['tags'];
-      expect(tags['type'], 'array');
-      expect(tags['items']['type'], 'string');
+      check(tags['type']).equals('array');
+      check(tags['items']['type']).equals('string');
 
       final counts = schema['properties']['counts'];
-      expect(counts['type'], 'array');
-      expect(counts['items']['type'], 'integer');
+      check(counts['type']).equals('array');
+      check(counts['items']['type']).equals('integer');
 
       final users = schema['properties']['users'];
-      expect(users['type'], 'array');
-      expect(users['items']['type'], 'object');
-      expect(users['items']['properties'].keys, equals(['id']));
+      check(users['type']).equals('array');
+      check(users['items']['type']).equals('object');
+      check((users['items']['properties'] as Map).keys).deepEquals(['id']);
     });
 
     test('generates schema through JsonFieldExtractor', () {
@@ -192,10 +188,12 @@ void main() {
         j.field.integerOrNull('age');
       });
 
-      expect(schema['required'], equals(['name']));
-      expect(schema['properties'].keys, unorderedEquals(['name', 'age']));
-      expect(schema['properties']['name']['type'], 'string');
-      expect(schema['properties']['age']['type'], 'integer');
+      check(schema['required'] as List).deepEquals(['name']);
+      check(
+        (schema['properties'] as Map).keys,
+      ).unorderedEquals(['name', 'age']);
+      check(schema['properties']['name']['type']).equals('string');
+      check(schema['properties']['age']['type']).equals('integer');
     });
 
     test('generates schema for timestamp, uri, and map', () {
@@ -218,45 +216,41 @@ void main() {
         j.map<Object>('anyMap');
       });
 
-      expect(
-        schema['required'],
-        unorderedEquals([
-          'createdAt',
-          'website',
-          'metadata',
-          'primitiveMap',
-          'anyMap',
-        ]),
-      );
+      check(schema['required'] as Iterable<Object?>).unorderedEquals([
+        'createdAt',
+        'website',
+        'metadata',
+        'primitiveMap',
+        'anyMap',
+      ]);
 
-      expect(schema['properties']['createdAt']['type'], 'integer');
-      expect(schema['properties']['updatedAt']['type'], 'integer');
+      check(schema['properties']['createdAt']['type']).equals('integer');
+      check(schema['properties']['updatedAt']['type']).equals('integer');
 
-      expect(schema['properties']['website']['type'], 'string');
-      expect(schema['properties']['website']['format'], 'uri');
+      check(schema['properties']['website']['type']).equals('string');
+      check(schema['properties']['website']['format']).equals('uri');
 
-      expect(schema['properties']['avatarUrl']['type'], 'string');
-      expect(schema['properties']['avatarUrl']['format'], 'uri');
+      check(schema['properties']['avatarUrl']['type']).equals('string');
+      check(schema['properties']['avatarUrl']['format']).equals('uri');
 
       final metadata = schema['properties']['metadata'];
-      expect(metadata['type'], 'object');
-      expect(metadata['additionalProperties']['type'], 'string');
+      check(metadata['type']).equals('object');
+      check(metadata['additionalProperties']['type']).equals('string');
 
       final stats = schema['properties']['stats'];
-      expect(stats['type'], 'object');
-      expect(stats['additionalProperties']['type'], 'object');
-      expect(
+      check(stats['type']).equals('object');
+      check(stats['additionalProperties']['type']).equals('object');
+      check(
         stats['additionalProperties']['properties']['count']['type'],
-        'integer',
-      );
+      ).equals('integer');
 
       final primitiveMap = schema['properties']['primitiveMap'];
-      expect(primitiveMap['type'], 'object');
-      expect(primitiveMap['additionalProperties']['type'], 'string');
+      check(primitiveMap['type']).equals('object');
+      check(primitiveMap['additionalProperties']['type']).equals('string');
 
       final anyMap = schema['properties']['anyMap'];
-      expect(anyMap['type'], 'object');
-      expect(anyMap['additionalProperties'], equals({}));
+      check(anyMap['type']).equals('object');
+      check(anyMap['additionalProperties'] as Map).deepEquals({});
     });
 
     test('generates schema for discriminated objects (oneOf)', () {
@@ -268,27 +262,31 @@ void main() {
         });
       });
 
-      expect(schema['allOf'], isNotNull);
+      check(schema['allOf']).isNotNull();
       final allOf = schema['allOf'] as List;
-      expect(allOf.length, equals(2));
+      check(allOf.length).equals(2);
 
       final baseObj = allOf[0];
-      expect(baseObj['properties']['base_field']['type'], 'string');
-      expect(baseObj['required'], equals(['base_field']));
+      check(baseObj['properties']['base_field']['type']).equals('string');
+      check(baseObj['required'] as List).deepEquals(['base_field']);
 
       final oneOfObj = allOf[1];
       final oneOfList = oneOfObj['oneOf'] as List;
-      expect(oneOfList.length, equals(2));
+      check(oneOfList.length).equals(2);
 
       final docSchema = oneOfList[0];
-      expect(docSchema['properties']['type']['const'], 'doc');
-      expect(docSchema['properties']['doc_id']['type'], 'string');
-      expect(docSchema['required'], unorderedEquals(['type', 'doc_id']));
+      check(docSchema['properties']['type']['const']).equals('doc');
+      check(docSchema['properties']['doc_id']['type']).equals('string');
+      check(
+        docSchema['required'] as Iterable<Object?>,
+      ).unorderedEquals(['type', 'doc_id']);
 
       final videoSchema = oneOfList[1];
-      expect(videoSchema['properties']['type']['const'], 'video');
-      expect(videoSchema['properties']['duration']['type'], 'integer');
-      expect(videoSchema['required'], unorderedEquals(['type', 'duration']));
+      check(videoSchema['properties']['type']['const']).equals('video');
+      check(videoSchema['properties']['duration']['type']).equals('integer');
+      check(
+        videoSchema['required'] as Iterable<Object?>,
+      ).unorderedEquals(['type', 'duration']);
     });
 
     test('generates schema for enumerations', () {
@@ -302,19 +300,21 @@ void main() {
         );
       });
 
-      expect(schema['required'], equals(['role', 'mapped_role']));
+      check(schema['required'] as List).deepEquals(['role', 'mapped_role']);
 
       final role = schema['properties']['role'];
-      expect(role['type'], 'string');
-      expect(role['enum'], equals(['admin', 'user', 'guest']));
+      check(role['type']).equals('string');
+      check(role['enum'] as List).deepEquals(['admin', 'user', 'guest']);
 
       final optionalRole = schema['properties']['optional_role'];
-      expect(optionalRole['type'], 'string');
-      expect(optionalRole['enum'], equals(['admin', 'user', 'guest']));
+      check(optionalRole['type']).equals('string');
+      check(
+        optionalRole['enum'] as List,
+      ).deepEquals(['admin', 'user', 'guest']);
 
       final mappedRole = schema['properties']['mapped_role'];
-      expect(mappedRole['type'], 'string');
-      expect(mappedRole['enum'], equals(['ADMIN', 'USER', 'GUEST']));
+      check(mappedRole['type']).equals('string');
+      check(mappedRole['enum'] as List).deepEquals(['ADMIN', 'USER', 'GUEST']);
     });
   });
 }

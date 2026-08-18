@@ -1,5 +1,6 @@
+import 'package:checks/checks.dart';
 import 'package:json_codable/json_codable.dart';
-import 'package:test/test.dart';
+import 'package:test/scaffolding.dart';
 
 void main() {
   group('JsonObject Primitives', () {
@@ -10,12 +11,23 @@ void main() {
       });
 
       final name = json.string('name', rules: [.length(min: 2, max: 10)]);
-      expect(name, equals('Alice'));
+      check(name).equals('Alice');
 
-      expect(
+      check(
         () => json.string('email', rules: [.length(max: 5)]),
-        throwsA(isA<ValidationErrors>()),
-      );
+      ).throws<ValidationErrors>();
+    });
+
+    test('exposes keys of the json object', () {
+      const json = JsonObject({
+        'a': 1,
+        'b': 'test',
+        'c': true,
+      });
+      check(json.keys).deepEquals(['a', 'b', 'c']);
+
+      const emptyJson = JsonObject({});
+      check(emptyJson.keys).isEmpty();
     });
 
     test('validates integer, float, boolean, dateTime, timestamp, uri', () {
@@ -28,27 +40,27 @@ void main() {
         'link': 'https://dart.dev',
       });
 
-      expect(json.integer('age', rules: [.range(min: 18)]), equals(25));
-      expect(json.integerOrNull('missing'), isNull);
+      check(json.integer('age', rules: [.range(min: 18)])).equals(25);
+      check(json.integerOrNull('missing')).isNull();
 
-      expect(json.float('score', rules: [.range(min: 50.0)]), equals(98.5));
-      expect(json.floatOrNull('missing'), isNull);
+      check(json.float('score', rules: [.range(min: 50.0)])).equals(98.5);
+      check(json.floatOrNull('missing')).isNull();
 
-      expect(json.boolean('active'), isTrue);
-      expect(json.booleanOrNull('missing'), isNull);
+      check(json.boolean('active')).isTrue();
+      check(json.booleanOrNull('missing')).isNull();
 
-      expect(json.dateTime('date').year, equals(2026));
-      expect(json.dateTimeOrNull('missing'), isNull);
+      check(json.dateTime('date').year).equals(2026);
+      check(json.dateTimeOrNull('missing')).isNull();
 
-      expect(json.timestamp('ts', isSeconds: true).year, equals(2020));
-      expect(json.timestampOrNull('missing'), isNull);
+      check(json.timestamp('ts', isSeconds: true).year).equals(2020);
+      check(json.timestampOrNull('missing')).isNull();
 
-      expect(json.uri('link').host, equals('dart.dev'));
-      expect(json.uriOrNull('missing'), isNull);
+      check(json.uri('link').host).equals('dart.dev');
+      check(json.uriOrNull('missing')).isNull();
 
-      expect(json.any('age'), equals(25));
-      expect(json.any('active'), isTrue);
-      expect(json.anyOrNull('missing'), isNull);
+      check(json.any('age')).equals(25);
+      check(json.any('active')).equals(true);
+      check(json.anyOrNull('missing')).isNull();
     });
 
     test('parses enumeration', () {
@@ -57,58 +69,50 @@ void main() {
         'mapped_status': 'PENDING',
       });
 
-      expect(
-        json.enumeration('status', _Status.values),
-        equals(_Status.active),
-      );
-      expect(
+      check(json.enumeration('status', _Status.values)).equals(_Status.active);
+      check(
         json.enumeration(
           'mapped_status',
           _Status.values,
           by: (e) => e.name.toUpperCase(),
         ),
-        equals(_Status.pending),
-      );
+      ).equals(_Status.pending);
 
-      expect(json.enumerationOrNull('missing', _Status.values), isNull);
+      check(json.enumerationOrNull('missing', _Status.values)).isNull();
     });
 
     test('throws error on invalid enumeration', () {
       const json = JsonObject({'status': 'unknown'});
-      expect(
-        () => json.enumeration('status', _Status.values),
-        throwsA(
-          predicate<ValidationErrors>((e) {
-            final fieldErr = e.errors['status'] as ValidationErrorsField?;
-            return fieldErr != null &&
-                fieldErr.errors.first.code == 'invalid_enum';
-          }),
-        ),
-      );
+      check(() => json.enumeration('status', _Status.values))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['status'], 'status error')
+          .isNotNull()
+          .first
+          .has((e) => e.code, 'code')
+          .equals('invalid_enum');
     });
 
     test('throws error on missing required field', () {
       const json = JsonObject({});
-      expect(
-        () => json.string('missing'),
-        throwsA(predicate<ValidationErrors>((e) => e.hasError('missing'))),
-      );
+      check(() => json.string('missing'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('missing'), 'hasError')
+          .isTrue();
     });
 
     test('accumulates all failed rules for a single field', () {
       const json = JsonObject({'pass': 'abc'});
 
-      try {
-        json.string('pass', rules: [.length(min: 8), .contains('!')]);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final fieldErr = e.errors['pass'];
-        expect(fieldErr, isA<ValidationErrorsField>());
-        final fieldList = (fieldErr! as ValidationErrorsField).errors;
-        expect(fieldList.length, equals(2));
-        expect(fieldList[0].code, equals('length'));
-        expect(fieldList[1].code, equals('contains'));
-      }
+      check(() => json.string('pass', rules: [.length(min: 8), .contains('!')]))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['pass'], 'pass errors')
+          .isNotNull()
+          .which(
+            (it) => it
+              ..length.equals(2)
+              ..first.has((e) => e.code, 'code').equals('length')
+              ..last.has((e) => e.code, 'code').equals('contains'),
+          );
     });
 
     test('primitive type errors', () {
@@ -121,30 +125,30 @@ void main() {
         'uri': 123,
       });
 
-      expect(
-        () => json.string('str'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['str'] != null)),
-      );
-      expect(
-        () => json.integer('int'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['int'] != null)),
-      );
-      expect(
-        () => json.float('float'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['float'] != null)),
-      );
-      expect(
-        () => json.boolean('bool'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['bool'] != null)),
-      );
-      expect(
-        () => json.dateTime('date'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['date'] != null)),
-      );
-      expect(
-        () => json.uri('uri'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['uri'] != null)),
-      );
+      check(() => json.string('str'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('str'), 'hasError str')
+          .isTrue();
+      check(() => json.integer('int'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('int'), 'hasError int')
+          .isTrue();
+      check(() => json.float('float'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('float'), 'hasError float')
+          .isTrue();
+      check(() => json.boolean('bool'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('bool'), 'hasError bool')
+          .isTrue();
+      check(() => json.dateTime('date'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('date'), 'hasError date')
+          .isTrue();
+      check(() => json.uri('uri'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('uri'), 'hasError uri')
+          .isTrue();
     });
 
     test('primitive parse and validation errors', () {
@@ -153,14 +157,14 @@ void main() {
         'uri': 'invalid-uri',
       });
 
-      expect(
-        () => json.dateTime('date'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['date'] != null)),
-      );
-      expect(
-        () => json.uri('uri'),
-        throwsA(predicate<ValidationErrors>((e) => e.errors['uri'] != null)),
-      );
+      check(() => json.dateTime('date'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('date'), 'hasError date')
+          .isTrue();
+      check(() => json.uri('uri'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('uri'), 'hasError uri')
+          .isTrue();
     });
 
     test('OrNull branches return valid data', () {
@@ -174,13 +178,19 @@ void main() {
         'uri': 'https://dart.dev',
       });
 
-      expect(json.stringOrNull('str'), equals('hello'));
-      expect(json.integerOrNull('int'), equals(42));
-      expect(json.floatOrNull('float'), equals(42.5));
-      expect(json.booleanOrNull('bool'), isTrue);
-      expect(json.dateTimeOrNull('date')?.year, equals(2026));
-      expect(json.timestampOrNull('ts', isSeconds: true)?.year, equals(2020));
-      expect(json.uriOrNull('uri')?.host, equals('dart.dev'));
+      check(json.stringOrNull('str')).equals('hello');
+      check(json.integerOrNull('int')).equals(42);
+      check(json.floatOrNull('float')).equals(42.5);
+      check(json.booleanOrNull('bool')).isNotNull().isTrue();
+      check(
+        json.dateTimeOrNull('date'),
+      ).isNotNull().has((d) => d.year, 'year').equals(2026);
+      check(
+        json.timestampOrNull('ts', isSeconds: true),
+      ).isNotNull().has((d) => d.year, 'year').equals(2020);
+      check(
+        json.uriOrNull('uri'),
+      ).isNotNull().has((u) => u.host, 'host').equals('dart.dev');
     });
   });
 
@@ -191,8 +201,8 @@ void main() {
       });
 
       final tags = json.list<String>('tags', rules: [.length(min: 3)]);
-      expect(tags, equals(['dart', 'flutter']));
-      expect(json.listOrNull<String>('missing'), isNull);
+      check(tags).deepEquals(['dart', 'flutter']);
+      check(json.listOrNull<String>('missing')).isNull();
     });
 
     test('validates list of nested objects', () {
@@ -203,7 +213,7 @@ void main() {
       });
 
       final users = json.list<String>('users', mapper: (j) => j.string('name'));
-      expect(users, equals(['Bob']));
+      check(users).deepEquals(['Bob']);
     });
 
     test('asserts when non-primitive list has no mapper', () {
@@ -211,10 +221,7 @@ void main() {
         'items': [1, 2],
       });
 
-      expect(
-        () => json.list<_CustomDto>('items'),
-        throwsA(isA<AssertionError>()),
-      );
+      check(() => json.list<_CustomDto>('items')).throws<AssertionError>();
     });
 
     test('validates primitive map with rules', () {
@@ -226,7 +233,7 @@ void main() {
       });
 
       final tags = json.map<String>('tags', rules: [.length(min: 2)]);
-      expect(tags, equals({'color': 'red', 'size': 'lg'}));
+      check(tags).deepEquals({'color': 'red', 'size': 'lg'});
 
       const badJson = JsonObject({
         'tags': {
@@ -235,15 +242,10 @@ void main() {
         },
       });
 
-      try {
-        badJson.map<String>('tags', rules: [.length(min: 2)]);
-        fail('Should have thrown ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errJson = e.toJson();
-        expect(errJson['tags'], isA<Map<String, dynamic>>());
-        final tagsErr = errJson['tags']! as Map<String, dynamic>;
-        expect(tagsErr.containsKey('size'), isTrue);
-      }
+      check(() => badJson.map<String>('tags', rules: [.length(min: 2)]))
+          .throws<ValidationErrors>()
+          .has((e) => e.toJson(), 'toJson')
+          .containsKey('tags.size');
     });
 
     test('validates object map', () {
@@ -255,9 +257,13 @@ void main() {
       });
 
       final items = json.map<_ItemDto>('items', mapper: _ItemDto.fromJson);
-      expect(items.keys, equals(['first', 'second']));
-      expect(items['first']!.title, equals('A'));
-      expect(items['second']!.title, equals('B'));
+      check(items.keys).deepEquals(['first', 'second']);
+      check(
+        items['first'],
+      ).isNotNull().has((i) => i.title, 'title').equals('A');
+      check(
+        items['second'],
+      ).isNotNull().has((i) => i.title, 'title').equals('B');
 
       const badJson = JsonObject({
         'items': {
@@ -266,15 +272,10 @@ void main() {
         },
       });
 
-      try {
-        badJson.map<_ItemDto>('items', mapper: _ItemDto.fromJson);
-        fail('Should have thrown ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errJson = e.toJson();
-        expect(errJson['items'], isA<Map<String, dynamic>>());
-        final itemsErr = errJson['items']! as Map<String, dynamic>;
-        expect(itemsErr.containsKey('second'), isTrue);
-      }
+      check(() => badJson.map<_ItemDto>('items', mapper: _ItemDto.fromJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.toJson(), 'toJson')
+          .containsKey('items.second.title');
     });
 
     test('accumulates errors across multiple fields via json.parse', () {
@@ -285,21 +286,23 @@ void main() {
       };
 
       final jsonInst = JsonObject(rawMap);
-      try {
-        jsonInst.parse(
-          (j) => _UserDto(
-            username: j.string('username', rules: [.length(min: 5)]),
-            email: j.string('email', rules: [.email()]),
-            age: j.integer('age', rules: [.range(min: 18)]),
-          ),
-        );
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final jsonResult = e.toJson();
-        expect(jsonResult.containsKey('username'), isTrue);
-        expect(jsonResult.containsKey('email'), isTrue);
-        expect(jsonResult.containsKey('age'), isTrue);
-      }
+      check(
+            () => jsonInst.parse(
+              (j) => _UserDto(
+                username: j.string('username', rules: [.length(min: 5)]),
+                email: j.string('email', rules: [.email()]),
+                age: j.integer('age', rules: [.range(min: 18)]),
+              ),
+            ),
+          )
+          .throws<ValidationErrors>()
+          .has((e) => e.toJson(), 'toJson')
+          .which(
+            (it) => it
+              ..containsKey('username')
+              ..containsKey('email')
+              ..containsKey('age'),
+          );
     });
 
     test(
@@ -314,33 +317,31 @@ void main() {
           ],
         };
 
-        try {
-          JsonObject(rawMap).parse(
-            (j) => _ComplexDto(
-              address: j.object(
-                'address',
-                (sub) {
-                  return _AddressDto(
-                    zip: sub.string('zip', rules: [.length(min: 5)]),
-                  );
-                },
+        check(
+              () => JsonObject(rawMap).parse(
+                (j) => _ComplexDto(
+                  address: j.object(
+                    'address',
+                    (sub) => _AddressDto(
+                      zip: sub.string('zip', rules: [.length(min: 5)]),
+                    ),
+                  ),
+                  items: j.list<_ItemDto>(
+                    'items',
+                    mapper: (sub) => _ItemDto(
+                      title: sub.string('title', rules: [.length(min: 1)]),
+                    ),
+                  ),
+                ),
               ),
-              items: j.list<_ItemDto>(
-                'items',
-                mapper: (sub) {
-                  return _ItemDto(
-                    title: sub.string('title', rules: [.length(min: 1)]),
-                  );
-                },
-              ),
-            ),
-          );
-          fail('Should throw ValidationErrors');
-        } on ValidationErrors catch (e) {
-          final serialized = e.toJson();
-          expect(serialized.containsKey('address'), isTrue);
-          expect(serialized.containsKey('items'), isTrue);
-        }
+            )
+            .throws<ValidationErrors>()
+            .has((e) => e.toJson(), 'toJson')
+            .which(
+              (it) => it
+                ..containsKey('address.zip')
+                ..containsKey('items.0.title'),
+            );
       },
     );
 
@@ -350,56 +351,47 @@ void main() {
         final rawMap1 = {
           'items': <Map<String, Object?>>[],
         };
-        try {
-          JsonObject(rawMap1).parse(
-            (j) => _ComplexDto(
-              address: j.object(
-                'address',
-                (sub) => _AddressDto(zip: sub.string('zip')),
+        check(
+              () => JsonObject(rawMap1).parse(
+                (j) => _ComplexDto(
+                  address: j.object(
+                    'address',
+                    (sub) => _AddressDto(zip: sub.string('zip')),
+                  ),
+                  items: j.list<_ItemDto>('items', mapper: _ItemDto.fromJson),
+                ),
               ),
-              items: j.list<_ItemDto>('items', mapper: _ItemDto.fromJson),
-            ),
-          );
-          fail('Should throw ValidationErrors');
-          // ignore: avoid_catching_errors
-        } on TypeError catch (e) {
-          fail('Should not throw TypeError: $e');
-        } on ValidationErrors catch (e) {
-          final serialized = e.toJson();
-          expect(serialized.containsKey('address'), isTrue);
-        }
+            )
+            .throws<ValidationErrors>()
+            .has((e) => e.toJson(), 'toJson')
+            .containsKey('address');
 
         final rawMap2 = {
           'address': 'not-a-map',
           'items': <Map<String, Object?>>[],
         };
-        try {
-          JsonObject(rawMap2).parse(
-            (j) => _ComplexDto(
-              address: j.object(
-                'address',
-                (sub) => _AddressDto(zip: sub.string('zip')),
+        check(
+              () => JsonObject(rawMap2).parse(
+                (j) => _ComplexDto(
+                  address: j.object(
+                    'address',
+                    (sub) => _AddressDto(zip: sub.string('zip')),
+                  ),
+                  items: j.list<_ItemDto>('items', mapper: _ItemDto.fromJson),
+                ),
               ),
-              items: j.list<_ItemDto>('items', mapper: _ItemDto.fromJson),
-            ),
-          );
-          fail('Should throw ValidationErrors');
-          // ignore: avoid_catching_errors
-        } on TypeError catch (e) {
-          fail('Should not throw TypeError: $e');
-        } on ValidationErrors catch (e) {
-          final serialized = e.toJson();
-          expect(serialized.containsKey('address'), isTrue);
-        }
+            )
+            .throws<ValidationErrors>()
+            .has((e) => e.toJson(), 'toJson')
+            .containsKey('address');
 
         const json = JsonObject({});
-        expect(
+        check(
           () => json.object(
             'address',
             (sub) => _AddressDto(zip: sub.string('zip')),
           ),
-          throwsA(isA<ValidationErrors>()),
-        );
+        ).throws<ValidationErrors>();
       },
     );
 
@@ -412,21 +404,17 @@ void main() {
         ],
       });
 
-      try {
-        json.list<String>('items');
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errField = e.errors['items']! as ValidationErrorsField;
-        expect(errField.errors.any((err) => err.code == 'type'), isTrue);
-      }
+      check(() => json.list<String>('items'))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['items'], 'items error')
+          .isNotNull()
+          .any((err) => err.has((e) => e.code, 'code').equals('type'));
 
-      try {
-        json.list<_ItemDto>('objs', mapper: _ItemDto.fromJson);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errField = e.errors['objs']! as ValidationErrorsField;
-        expect(errField.errors.any((err) => err.code == 'type'), isTrue);
-      }
+      check(() => json.list<_ItemDto>('objs', mapper: _ItemDto.fromJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['objs'], 'objs error')
+          .isNotNull()
+          .any((err) => err.has((e) => e.code, 'code').equals('type'));
     });
 
     test('type errors in map elements', () {
@@ -441,64 +429,55 @@ void main() {
         },
       });
 
-      try {
-        json.map<String>('items');
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errObj = e.errors['items']! as ValidationErrorsObject;
-        expect(errObj.errors.errors.containsKey('second'), isTrue);
-      }
+      check(() => json.map<String>('items'))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors, 'errors')
+          .containsKey('items.second');
 
-      try {
-        json.map<_ItemDto>('objs', mapper: _ItemDto.fromJson);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final errObj = e.errors['objs']! as ValidationErrorsObject;
-        expect(errObj.errors.errors.containsKey('second'), isTrue);
-      }
+      check(() => json.map<_ItemDto>('objs', mapper: _ItemDto.fromJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors, 'errors')
+          .containsKey('objs.second');
     });
 
     test('map primitive without mapper handles type errors', () {
       const json = JsonObject({
         'map': {'a': 1},
       });
-      try {
-        json.map<String>('map');
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final err = e.errors['map']! as ValidationErrorsObject;
-        expect(err.errors.errors.containsKey('a'), isTrue);
-      }
+      check(() => json.map<String>('map'))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors, 'errors')
+          .containsKey('map.a');
     });
 
     test('deep object dummy fallback handling', () {
       const json = JsonObject({
         'obj': {'nested': 1},
       });
-      try {
-        json.parse((j) {
-          return j.object('obj', (sub1) {
-            return sub1.object('nested', (sub2) {
-              return sub2.string('foo');
-            });
-          });
-        });
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final jsonResult = e.toJson();
-        final obj = jsonResult['obj']! as Map<String, dynamic>;
-        final nested = obj['nested']! as List<dynamic>;
-        final firstErr = nested[0] as Map<String, dynamic>;
-        expect(firstErr['code'], equals('type'));
-      }
+      check(
+            () => json.parse((j) {
+              return j.object('obj', (sub1) {
+                return sub1.object('nested', (sub2) {
+                  return sub2.string('foo');
+                });
+              });
+            }),
+          )
+          .throws<ValidationErrors>()
+          .has((e) => e.toJson(), 'toJson')
+          .has((m) => m['obj.nested']! as List, 'obj.nested')
+          .first
+          .isA<Map<String, dynamic>>()
+          .has((m) => m['code'], 'code')
+          .equals('type');
     });
 
     test('mapOrNull returns correctly', () {
       const json = JsonObject({
         'map': {'a': 'b'},
       });
-      expect(json.mapOrNull<String>('map'), equals({'a': 'b'}));
-      expect(json.mapOrNull<String>('missing'), isNull);
+      check(json.mapOrNull<String>('map')).isNotNull().deepEquals({'a': 'b'});
+      check(json.mapOrNull<String>('missing')).isNull();
     });
   });
 
@@ -509,55 +488,57 @@ void main() {
         'doc_id': 'doc-1',
       });
       final doc = _FileDto.fromJson(docJson);
-      expect(doc, isA<_DocDto>());
-      expect((doc as _DocDto).docId, equals('doc-1'));
+      check(doc).isA<_DocDto>().has((d) => d.docId, 'docId').equals('doc-1');
 
       const videoJson = JsonObject({
         'type': 'video',
         'duration': 120,
       });
       final video = _FileDto.fromJson(videoJson);
-      expect(video, isA<_VideoDto>());
-      expect((video as _VideoDto).duration, equals(120));
+      check(
+        video,
+      ).isA<_VideoDto>().has((v) => v.duration, 'duration').equals(120);
     });
 
     test('discriminated throws on missing type field', () {
       const invalidJson = JsonObject({'doc_id': 'doc-1'});
-      try {
-        _FileDto.fromJson(invalidJson);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final fieldErr = e.errors['type']! as ValidationErrorsField;
-        expect(fieldErr.errors.first.code, equals('required'));
-      }
+      check(() => _FileDto.fromJson(invalidJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['type'], 'type error')
+          .isNotNull()
+          .first
+          .has((e) => e.code, 'code')
+          .equals('required');
     });
 
     test('discriminated throws on invalid discriminator value', () {
       const invalidJson = JsonObject({'type': 'audio', 'doc_id': 'doc-1'});
-      try {
-        _FileDto.fromJson(invalidJson);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final fieldErr = e.errors['type']! as ValidationErrorsField;
-        expect(fieldErr.errors.first.code, equals('invalid_discriminator'));
-        expect(
-          fieldErr.errors.first.params['expected'],
-          unorderedEquals(['doc', 'video']),
-        );
-      }
+      check(() => _FileDto.fromJson(invalidJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['type'], 'type error')
+          .isNotNull()
+          .first
+          .which(
+            (it) => it
+              ..has((e) => e.code, 'code').equals('invalid_discriminator')
+              ..has(
+                (e) => e.params['expected']! as List,
+                'expected',
+              ).unorderedEquals(['doc', 'video']),
+          );
     });
 
     test('discriminated passes errors from child correctly', () {
       const invalidJson = JsonObject({
         'type': 'doc',
       });
-      try {
-        _FileDto.fromJson(invalidJson);
-        fail('Should throw ValidationErrors');
-      } on ValidationErrors catch (e) {
-        final fieldErr = e.errors['doc_id']! as ValidationErrorsField;
-        expect(fieldErr.errors.first.code, equals('required'));
-      }
+      check(() => _FileDto.fromJson(invalidJson))
+          .throws<ValidationErrors>()
+          .has((e) => e.errors['doc_id'], 'doc_id error')
+          .isNotNull()
+          .first
+          .has((e) => e.code, 'code')
+          .equals('required');
     });
   });
 
@@ -565,21 +546,21 @@ void main() {
     test('absent fields return JsonAbsent', () {
       const json = JsonObject({});
 
-      expect(json.field.string('missing').isPresent, isFalse);
-      expect(json.field.stringOrNull('missing').isPresent, isFalse);
+      check(json.field.string('missing').isPresent).isFalse();
+      check(json.field.stringOrNull('missing').isPresent).isFalse();
 
       final absent = json.field.string('missing');
-      expect(absent.valueOrNull, isNull);
-      expect(() => absent.value, throwsStateError);
+      check(absent.valueOrNull).isNull();
+      check(() => absent.value).throws<StateError>();
     });
 
     test('strict methods throw when value is explicitly null', () {
       const json = JsonObject({'name': null});
 
-      expect(
-        () => json.field.string('name'),
-        throwsA(predicate<ValidationErrors>((e) => e.hasError('name'))),
-      );
+      check(() => json.field.string('name'))
+          .throws<ValidationErrors>()
+          .has((e) => e.hasError('name'), 'hasError name')
+          .isTrue();
     });
 
     test(
@@ -588,9 +569,9 @@ void main() {
         const json = JsonObject({'avatar': null});
 
         final field = json.field.stringOrNull('avatar');
-        expect(field.isPresent, isTrue);
-        expect(field.value, isNull);
-        expect(field.valueOrNull, isNull);
+        check(field.isPresent).isTrue();
+        check(field.value).isNull();
+        check(field.valueOrNull).isNull();
       },
     );
 
@@ -600,12 +581,12 @@ void main() {
         const json = JsonObject({'name': 'Abob', 'avatar': 'url'});
 
         final nameField = json.field.string('name');
-        expect(nameField.isPresent, isTrue);
-        expect(nameField.value, equals('Abob'));
+        check(nameField.isPresent).isTrue();
+        check(nameField.value).equals('Abob');
 
         final avatarField = json.field.stringOrNull('avatar');
-        expect(avatarField.isPresent, isTrue);
-        expect(avatarField.value, equals('url'));
+        check(avatarField.isPresent).isTrue();
+        check(avatarField.value).equals('url');
       },
     );
 
@@ -613,21 +594,21 @@ void main() {
       const json = JsonObject({'status': 'active', 'missing_status': null});
 
       final statusField = json.field.enumeration('status', _Status.values);
-      expect(statusField.isPresent, isTrue);
-      expect(statusField.value, equals(_Status.active));
+      check(statusField.isPresent).isTrue();
+      check(statusField.value).equals(_Status.active);
 
       final missingField = json.field.enumerationOrNull(
         'absent',
         _Status.values,
       );
-      expect(missingField.isPresent, isFalse);
+      check(missingField.isPresent).isFalse();
 
       final nullField = json.field.enumerationOrNull(
         'missing_status',
         _Status.values,
       );
-      expect(nullField.isPresent, isTrue);
-      expect(nullField.value, isNull);
+      check(nullField.isPresent).isTrue();
+      check(nullField.value).isNull();
     });
   });
 }
