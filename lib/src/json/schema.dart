@@ -76,10 +76,48 @@ class _SchemaContext {
   final Map<String, Schema> properties = {};
   final List<String> requiredFields = [];
   final List<Schema> oneOf = [];
+  String? discriminator;
 
   void add(String key, Schema schema, {required bool isRequired}) {
     properties[key] = schema;
     if (isRequired) requiredFields.add(key);
+  }
+
+  Schema toSchema({String? title, String? description}) {
+    if (properties.containsKey(r'$')) {
+      return properties[r'$']!;
+    }
+
+    Schema? objectSchema;
+    if (properties.isNotEmpty || oneOf.isEmpty) {
+      objectSchema = Schema.object(
+        title: oneOf.isEmpty ? title : null,
+        description: oneOf.isEmpty ? description : null,
+        properties: properties.isNotEmpty ? properties : null,
+        required: requiredFields.isNotEmpty ? requiredFields : null,
+      );
+    }
+
+    if (oneOf.isNotEmpty) {
+      final combined = Schema.fromMap({
+        if (objectSchema == null && title != null) 'title': title,
+        if (objectSchema == null && description != null)
+          'description': description,
+        if (discriminator != null)
+          'discriminator': {'propertyName': discriminator},
+        'oneOf': oneOf.map((s) => s.value).toList(),
+      });
+      if (objectSchema != null) {
+        return Schema.combined(
+          title: title,
+          description: description,
+          allOf: [objectSchema, combined],
+        );
+      }
+      return combined;
+    }
+
+    return objectSchema!;
   }
 }
 
@@ -309,6 +347,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
     String key,
     Map<String, T Function(JsonObject json)> mappers,
   ) {
+    _schemaCtx.discriminator = key;
     for (final entry in mappers.entries) {
       final childCtx = _SchemaContext();
       final childJson = _SchemaJsonObject(childCtx);
@@ -337,10 +376,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
     mapper(childJson);
     _schemaCtx.add(
       key,
-      Schema.object(
-        properties: childCtx.properties,
-        required: childCtx.requiredFields,
-      ),
+      childCtx.toSchema(),
       isRequired: true,
     );
     return super.object(key, mapper);
@@ -353,10 +389,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
     mapper(childJson);
     _schemaCtx.add(
       key,
-      Schema.object(
-        properties: childCtx.properties,
-        required: childCtx.requiredFields,
-      ),
+      childCtx.toSchema(),
       isRequired: false,
     );
     return super.objectOrNull(key, mapper);
@@ -373,14 +406,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
       final childCtx = _SchemaContext();
       final childJson = _SchemaJsonObject(childCtx);
       mapper(childJson);
-      if (childCtx.properties.containsKey(r'$')) {
-        itemSchema = childCtx.properties[r'$']!;
-      } else {
-        itemSchema = Schema.object(
-          properties: childCtx.properties,
-          required: childCtx.requiredFields,
-        );
-      }
+      itemSchema = childCtx.toSchema();
     } else {
       itemSchema = _primitiveSchema<T>();
     }
@@ -399,14 +425,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
       final childCtx = _SchemaContext();
       final childJson = _SchemaJsonObject(childCtx);
       mapper(childJson);
-      if (childCtx.properties.containsKey(r'$')) {
-        itemSchema = childCtx.properties[r'$']!;
-      } else {
-        itemSchema = Schema.object(
-          properties: childCtx.properties,
-          required: childCtx.requiredFields,
-        );
-      }
+      itemSchema = childCtx.toSchema();
     } else {
       itemSchema = _primitiveSchema<T>();
     }
@@ -425,14 +444,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
       final childCtx = _SchemaContext();
       final childJson = _SchemaJsonObject(childCtx);
       mapper(childJson);
-      if (childCtx.properties.containsKey(r'$')) {
-        itemSchema = childCtx.properties[r'$']!;
-      } else {
-        itemSchema = Schema.object(
-          properties: childCtx.properties,
-          required: childCtx.requiredFields,
-        );
-      }
+      itemSchema = childCtx.toSchema();
     } else {
       itemSchema = _primitiveSchema<T>();
     }
@@ -455,14 +467,7 @@ class _SchemaJsonObject extends _DummyJsonObject {
       final childCtx = _SchemaContext();
       final childJson = _SchemaJsonObject(childCtx);
       mapper(childJson);
-      if (childCtx.properties.containsKey(r'$')) {
-        itemSchema = childCtx.properties[r'$']!;
-      } else {
-        itemSchema = Schema.object(
-          properties: childCtx.properties,
-          required: childCtx.requiredFields,
-        );
-      }
+      itemSchema = childCtx.toSchema();
     } else {
       itemSchema = _primitiveSchema<T>();
     }

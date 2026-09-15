@@ -271,6 +271,7 @@ void main() {
       check(baseObj['required'] as List).deepEquals(['base_field']);
 
       final oneOfObj = allOf[1];
+      check(oneOfObj['discriminator']['propertyName']).equals('type');
       final oneOfList = oneOfObj['oneOf'] as List;
       check(oneOfList.length).equals(2);
 
@@ -287,6 +288,89 @@ void main() {
       check(
         videoSchema['required'] as Iterable<Object?>,
       ).unorderedEquals(['type', 'duration']);
+    });
+
+    test('generates schema for list of discriminated objects', () {
+      final dynamic schema = JsonObject.schema((j) {
+        j.list(
+          'items',
+          mapper: (itemJson) => itemJson.discriminated('kind', {
+            'text': (j) => j.string('text'),
+            'image': (j) => j.string('url'),
+          }),
+        );
+      });
+
+      check(schema['required'] as List).deepEquals(['items']);
+      final itemsField = schema['properties']['items'];
+      check(itemsField['type']).equals('array');
+      check(
+        itemsField['items']['discriminator']['propertyName'],
+      ).equals('kind');
+
+      final oneOfList = itemsField['items']['oneOf'] as List;
+      check(oneOfList.length).equals(2);
+
+      final textVariant = oneOfList[0];
+      check(textVariant['properties']['kind']['const']).equals('text');
+      check(textVariant['properties']['text']['type']).equals('string');
+      check(
+        textVariant['required'] as Iterable<Object?>,
+      ).unorderedEquals(['kind', 'text']);
+
+      final imageVariant = oneOfList[1];
+      check(imageVariant['properties']['kind']['const']).equals('image');
+      check(imageVariant['properties']['url']['type']).equals('string');
+      check(
+        imageVariant['required'] as Iterable<Object?>,
+      ).unorderedEquals(['kind', 'url']);
+    });
+
+    test('generates schema for nested discriminated object', () {
+      final dynamic schema = JsonObject.schema((j) {
+        j.object(
+          'payload',
+          (childJson) => childJson.discriminated('event', {
+            'click': (j) => j.string('target'),
+            'hover': (j) => j.integer('duration'),
+          }),
+        );
+      });
+
+      check(schema['required'] as List).deepEquals(['payload']);
+      final payloadField = schema['properties']['payload'];
+      final oneOfList = payloadField['oneOf'] as List;
+      check(oneOfList.length).equals(2);
+
+      final clickVariant = oneOfList[0];
+      check(clickVariant['properties']['event']['const']).equals('click');
+      check(clickVariant['properties']['target']['type']).equals('string');
+
+      final hoverVariant = oneOfList[1];
+      check(hoverVariant['properties']['event']['const']).equals('hover');
+      check(hoverVariant['properties']['duration']['type']).equals('integer');
+    });
+
+    test('generates schema for map of discriminated objects', () {
+      final dynamic schema = JsonObject.schema((j) {
+        j.map(
+          'by_id',
+          mapper: (childJson) => childJson.discriminated('type', {
+            'a': (j) => j.string('name'),
+            'b': (j) => j.boolean('flag'),
+          }),
+        );
+      });
+
+      check(schema['required'] as List).deepEquals(['by_id']);
+      final mapField = schema['properties']['by_id'];
+      check(mapField['type']).equals('object');
+
+      final addProps = mapField['additionalProperties'];
+      final oneOfList = addProps['oneOf'] as List;
+      check(oneOfList.length).equals(2);
+      check(oneOfList[0]['properties']['type']['const']).equals('a');
+      check(oneOfList[1]['properties']['type']['const']).equals('b');
     });
 
     test('generates schema for enumerations', () {

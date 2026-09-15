@@ -25,34 +25,7 @@ abstract interface class JsonObject {
     final ctx = _SchemaContext();
     final json = _SchemaJsonObject(ctx);
     mapper(json);
-
-    Schema? objectSchema;
-    if (ctx.properties.isNotEmpty || ctx.oneOf.isEmpty) {
-      objectSchema = Schema.object(
-        title: ctx.oneOf.isEmpty ? title : null,
-        description: ctx.oneOf.isEmpty ? description : null,
-        properties: ctx.properties.isNotEmpty ? ctx.properties : null,
-        required: ctx.requiredFields.isNotEmpty ? ctx.requiredFields : null,
-      );
-    }
-
-    if (ctx.oneOf.isNotEmpty) {
-      final combined = Schema.combined(
-        title: objectSchema == null ? title : null,
-        description: objectSchema == null ? description : null,
-        oneOf: ctx.oneOf,
-      );
-      if (objectSchema != null) {
-        return Schema.combined(
-          title: title,
-          description: description,
-          allOf: [objectSchema, combined],
-        );
-      }
-      return combined;
-    }
-
-    return objectSchema!;
+    return ctx.toSchema(title: title, description: description);
   }
 
   JsonFieldExtractor get field;
