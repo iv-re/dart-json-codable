@@ -11,7 +11,7 @@ typedef _SchemaConstraints = ({
   num? exclusiveMaximum,
 });
 
-_SchemaConstraints _aggregateRules(List<ValidationRule<Object>> rules) {
+_SchemaConstraints _aggregateRules(List<ValidationRule<Object?>> rules) {
   int? minLength;
   int? maxLength;
   String? pattern;
@@ -64,12 +64,46 @@ _SchemaConstraints _aggregateRules(List<ValidationRule<Object>> rules) {
   );
 }
 
-Schema _primitiveSchema<T>() {
-  if (T == String) return .string();
-  if (T == int) return .integer();
-  if (T == double || T == num) return .number();
-  if (T == bool) return .boolean();
-  return .any();
+/// Adds the constraints [rules] imply to [schema].
+Schema _constrainSchema(Schema schema, List<ValidationRule<Object?>> rules) {
+  final c = _aggregateRules(rules);
+  num? bound(num? value) =>
+      schema.value['type'] == 'integer' ? value?.toInt() : value;
+
+  final constraints = switch (schema.value['type']) {
+    'string' => {
+      'minLength': ?c.minLength,
+      'maxLength': ?c.maxLength,
+      'pattern': ?c.pattern,
+      'format': ?c.format,
+    },
+    'integer' || 'number' => {
+      'minimum': ?bound(c.minimum),
+      'maximum': ?bound(c.maximum),
+      'exclusiveMinimum': ?bound(c.exclusiveMinimum),
+      'exclusiveMaximum': ?bound(c.exclusiveMaximum),
+    },
+    _ => const <String, Object>{},
+  };
+  if (constraints.isEmpty) return schema;
+  return Schema.fromMap({...schema.value, ...constraints});
+}
+
+/// Builds the schema of the objects [mapper] parses by running it on a
+/// [_SchemaJsonObject].
+Schema _traceSchema(
+  Object? Function(JsonObject json) mapper, {
+  String? title,
+  String? description,
+}) {
+  final ctx = _SchemaContext();
+  try {
+    mapper(_SchemaJsonObject(ctx));
+  } catch (e) {
+    // The mapper rejected a placeholder value; keep the fields traced so far.
+    if (e is AssertionError) rethrow;
+  }
+  return ctx.toSchema(title: title, description: description);
 }
 
 class _SchemaContext {
@@ -121,6 +155,7 @@ class _SchemaContext {
   }
 }
 
+/// A [JsonObject] that records the schema of every field read from it.
 class _SchemaJsonObject extends _DummyJsonObject {
   const _SchemaJsonObject(this._schemaCtx);
 
@@ -130,216 +165,15 @@ class _SchemaJsonObject extends _DummyJsonObject {
   bool has(String key) => true;
 
   @override
-  Object any(String key) {
-    _schemaCtx.add(key, Schema.any(), isRequired: true);
-    return super.any(key);
+  T read<T>(String key, JsonType<T> type) {
+    _schemaCtx.add(key, type.schema(), isRequired: true);
+    return super.read(key, type);
   }
 
   @override
-  Object? anyOrNull(String key) {
-    _schemaCtx.add(key, Schema.any(), isRequired: false);
-    return super.anyOrNull(key);
-  }
-
-  @override
-  String string(String key, {List<ValidationRule<String>> rules = const []}) {
-    final c = _aggregateRules(rules);
-    _schemaCtx.add(
-      key,
-      Schema.string(
-        minLength: c.minLength,
-        maxLength: c.maxLength,
-        pattern: c.pattern,
-        format: c.format,
-      ),
-      isRequired: true,
-    );
-    return super.string(key, rules: rules);
-  }
-
-  @override
-  String? stringOrNull(
-    String key, {
-    List<ValidationRule<String>> rules = const [],
-  }) {
-    final c = _aggregateRules(rules);
-
-    _schemaCtx.add(
-      key,
-      Schema.string(
-        minLength: c.minLength,
-        maxLength: c.maxLength,
-        pattern: c.pattern,
-        format: c.format,
-      ),
-      isRequired: false,
-    );
-    return super.stringOrNull(key, rules: rules);
-  }
-
-  @override
-  int integer(String key, {List<ValidationRule<num>> rules = const []}) {
-    final c = _aggregateRules(rules);
-    _schemaCtx.add(
-      key,
-      Schema.integer(
-        minimum: c.minimum?.toInt(),
-        maximum: c.maximum?.toInt(),
-        exclusiveMinimum: c.exclusiveMinimum?.toInt(),
-        exclusiveMaximum: c.exclusiveMaximum?.toInt(),
-      ),
-      isRequired: true,
-    );
-    return super.integer(key, rules: rules);
-  }
-
-  @override
-  int? integerOrNull(
-    String key, {
-    List<ValidationRule<num>> rules = const [],
-  }) {
-    final c = _aggregateRules(rules);
-    _schemaCtx.add(
-      key,
-      Schema.integer(
-        minimum: c.minimum?.toInt(),
-        maximum: c.maximum?.toInt(),
-        exclusiveMinimum: c.exclusiveMinimum?.toInt(),
-        exclusiveMaximum: c.exclusiveMaximum?.toInt(),
-      ),
-      isRequired: false,
-    );
-    return super.integerOrNull(key, rules: rules);
-  }
-
-  @override
-  double float(String key, {List<ValidationRule<num>> rules = const []}) {
-    final c = _aggregateRules(rules);
-    _schemaCtx.add(
-      key,
-      Schema.number(
-        minimum: c.minimum,
-        maximum: c.maximum,
-        exclusiveMinimum: c.exclusiveMinimum,
-        exclusiveMaximum: c.exclusiveMaximum,
-      ),
-      isRequired: true,
-    );
-    return super.float(key, rules: rules);
-  }
-
-  @override
-  double? floatOrNull(
-    String key, {
-    List<ValidationRule<num>> rules = const [],
-  }) {
-    final c = _aggregateRules(rules);
-    _schemaCtx.add(
-      key,
-      Schema.number(
-        minimum: c.minimum,
-        maximum: c.maximum,
-        exclusiveMinimum: c.exclusiveMinimum,
-        exclusiveMaximum: c.exclusiveMaximum,
-      ),
-      isRequired: false,
-    );
-    return super.floatOrNull(key, rules: rules);
-  }
-
-  @override
-  bool boolean(String key) {
-    _schemaCtx.add(key, Schema.boolean(), isRequired: true);
-    return super.boolean(key);
-  }
-
-  @override
-  bool? booleanOrNull(String key) {
-    _schemaCtx.add(key, Schema.boolean(), isRequired: false);
-    return super.booleanOrNull(key);
-  }
-
-  @override
-  DateTime dateTime(
-    String key, {
-    List<ValidationRule<DateTime>> rules = const [],
-  }) {
-    _schemaCtx.add(key, Schema.string(format: 'date-time'), isRequired: true);
-    return super.dateTime(key, rules: rules);
-  }
-
-  @override
-  DateTime? dateTimeOrNull(
-    String key, {
-    List<ValidationRule<DateTime>> rules = const [],
-  }) {
-    _schemaCtx.add(key, Schema.string(format: 'date-time'), isRequired: false);
-    return super.dateTimeOrNull(key, rules: rules);
-  }
-
-  @override
-  DateTime timestamp(
-    String key, {
-    bool isSeconds = false,
-    List<ValidationRule<DateTime>> rules = const [],
-  }) {
-    _schemaCtx.add(key, Schema.integer(), isRequired: true);
-    return super.timestamp(key, isSeconds: isSeconds, rules: rules);
-  }
-
-  @override
-  DateTime? timestampOrNull(
-    String key, {
-    bool isSeconds = false,
-    List<ValidationRule<DateTime>> rules = const [],
-  }) {
-    _schemaCtx.add(key, Schema.integer(), isRequired: false);
-    return super.timestampOrNull(key, isSeconds: isSeconds, rules: rules);
-  }
-
-  @override
-  Uri uri(String key, {List<ValidationRule<String>> rules = const []}) {
-    _schemaCtx.add(key, Schema.string(format: 'uri'), isRequired: true);
-    return super.uri(key, rules: rules);
-  }
-
-  @override
-  Uri? uriOrNull(
-    String key, {
-    List<ValidationRule<String>> rules = const [],
-  }) {
-    _schemaCtx.add(key, Schema.string(format: 'uri'), isRequired: false);
-    return super.uriOrNull(key, rules: rules);
-  }
-
-  @override
-  T enumeration<T extends Enum>(
-    String key,
-    Iterable<T> values, {
-    String Function(T value)? by,
-  }) {
-    final stringValues = values.map((e) => by?.call(e) ?? e.name).toList();
-    _schemaCtx.add(
-      key,
-      Schema.string(enumValues: stringValues),
-      isRequired: true,
-    );
-    return super.enumeration(key, values, by: by);
-  }
-
-  @override
-  T? enumerationOrNull<T extends Enum>(
-    String key,
-    Iterable<T> values, {
-    String Function(T value)? by,
-  }) {
-    final stringValues = values.map((e) => by?.call(e) ?? e.name).toList();
-    _schemaCtx.add(
-      key,
-      Schema.string(enumValues: stringValues),
-      isRequired: false,
-    );
-    return super.enumerationOrNull(key, values, by: by);
+  T? readOrNull<T>(String key, JsonType<T> type) {
+    _schemaCtx.add(key, type.schema(), isRequired: false);
+    return super.readOrNull(key, type);
   }
 
   @override
@@ -350,8 +184,12 @@ class _SchemaJsonObject extends _DummyJsonObject {
     _schemaCtx.discriminator = key;
     for (final entry in mappers.entries) {
       final childCtx = _SchemaContext();
-      final childJson = _SchemaJsonObject(childCtx);
-      entry.value(childJson);
+      try {
+        entry.value(_SchemaJsonObject(childCtx));
+      } catch (e) {
+        // Same as in _traceSchema.
+        if (e is AssertionError) rethrow;
+      }
 
       childCtx.add(
         key,
@@ -359,123 +197,13 @@ class _SchemaJsonObject extends _DummyJsonObject {
         isRequired: true,
       );
 
-      final schema = Schema.object(
-        properties: childCtx.properties,
-        required: childCtx.requiredFields,
+      _schemaCtx.oneOf.add(
+        Schema.object(
+          properties: childCtx.properties,
+          required: childCtx.requiredFields,
+        ),
       );
-
-      _schemaCtx.oneOf.add(schema);
     }
     return super.discriminated(key, mappers);
-  }
-
-  @override
-  T object<T>(String key, T Function(JsonObject json) mapper) {
-    final childCtx = _SchemaContext();
-    final childJson = _SchemaJsonObject(childCtx);
-    mapper(childJson);
-    _schemaCtx.add(
-      key,
-      childCtx.toSchema(),
-      isRequired: true,
-    );
-    return super.object(key, mapper);
-  }
-
-  @override
-  T? objectOrNull<T>(String key, T Function(JsonObject json) mapper) {
-    final childCtx = _SchemaContext();
-    final childJson = _SchemaJsonObject(childCtx);
-    mapper(childJson);
-    _schemaCtx.add(
-      key,
-      childCtx.toSchema(),
-      isRequired: false,
-    );
-    return super.objectOrNull(key, mapper);
-  }
-
-  @override
-  List<T> list<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
-    Schema itemSchema;
-    if (mapper != null) {
-      final childCtx = _SchemaContext();
-      final childJson = _SchemaJsonObject(childCtx);
-      mapper(childJson);
-      itemSchema = childCtx.toSchema();
-    } else {
-      itemSchema = _primitiveSchema<T>();
-    }
-    _schemaCtx.add(key, Schema.list(items: itemSchema), isRequired: true);
-    return super.list(key, mapper: mapper, rules: rules);
-  }
-
-  @override
-  List<T>? listOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
-    Schema itemSchema;
-    if (mapper != null) {
-      final childCtx = _SchemaContext();
-      final childJson = _SchemaJsonObject(childCtx);
-      mapper(childJson);
-      itemSchema = childCtx.toSchema();
-    } else {
-      itemSchema = _primitiveSchema<T>();
-    }
-    _schemaCtx.add(key, Schema.list(items: itemSchema), isRequired: false);
-    return super.listOrNull(key, mapper: mapper, rules: rules);
-  }
-
-  @override
-  Map<String, T> map<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
-    Schema itemSchema;
-    if (mapper != null) {
-      final childCtx = _SchemaContext();
-      final childJson = _SchemaJsonObject(childCtx);
-      mapper(childJson);
-      itemSchema = childCtx.toSchema();
-    } else {
-      itemSchema = _primitiveSchema<T>();
-    }
-    _schemaCtx.add(
-      key,
-      Schema.object(additionalProperties: itemSchema),
-      isRequired: true,
-    );
-    return super.map(key, mapper: mapper, rules: rules);
-  }
-
-  @override
-  Map<String, T>? mapOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
-    Schema itemSchema;
-    if (mapper != null) {
-      final childCtx = _SchemaContext();
-      final childJson = _SchemaJsonObject(childCtx);
-      mapper(childJson);
-      itemSchema = childCtx.toSchema();
-    } else {
-      itemSchema = _primitiveSchema<T>();
-    }
-    _schemaCtx.add(
-      key,
-      Schema.object(additionalProperties: itemSchema),
-      isRequired: false,
-    );
-    return super.mapOrNull(key, mapper: mapper, rules: rules);
   }
 }

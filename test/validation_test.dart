@@ -27,38 +27,23 @@ void main() {
       });
     });
 
-    test('serializes nested object error with dot notation', () {
-      final childErrors = ValidationErrors();
-      childErrors.add(
-        'zip',
-        const ValidationError(code: 'length', message: 'Too short'),
-      );
+    test('merge prefixes keys with dot notation', () {
+      final child = ValidationErrors()
+        ..add(
+          'zip',
+          const ValidationError(code: 'length', message: 'Too short'),
+        );
 
-      final parentErrors = ValidationErrors();
-      parentErrors.merge(childErrors, 'address');
+      final parent = ValidationErrors()
+        ..merge(child, 'address')
+        ..merge(child, 'items.0');
 
-      final json = parentErrors.toJson();
-      check(json).deepEquals({
+      check(parent.toJson()).deepEquals({
         'address.zip': [
           {'code': 'length', 'message': 'Too short'},
         ],
-      });
-    });
-
-    test('serializes list item errors with dot notation and indexed keys', () {
-      final itemErrors = ValidationErrors();
-      itemErrors.add(
-        'title',
-        const ValidationError(code: 'required', message: 'Required'),
-      );
-
-      final parentErrors = ValidationErrors();
-      parentErrors.merge(itemErrors, 'items.0');
-
-      final json = parentErrors.toJson();
-      check(json).deepEquals({
-        'items.0.title': [
-          {'code': 'required', 'message': 'Required'},
+        'items.0.zip': [
+          {'code': 'length', 'message': 'Too short'},
         ],
       });
     });

@@ -6,7 +6,7 @@ class CreateUserDto {
   CreateUserDto.fromJson(JsonObject json)
     : name = json.string('name', rules: [.length(min: 2)]),
       email = json.string('email', rules: [.email()]),
-      age = json.integerOrNull('age', rules: [.range(min: 18)]);
+      age = json.intOrNull('age', rules: [.range(min: 18)]);
 
   static final Schema schema = JsonObject.schema(
     CreateUserDto.fromJson,

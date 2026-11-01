@@ -1,10 +1,15 @@
+import 'dart:core';
+import 'dart:core' as core;
+
 import 'package:json_codable/src/validation.dart';
 import 'package:json_schema_builder/json_schema_builder.dart'
     hide ValidationError;
 
 part 'dummy.dart';
+part 'getters.dart';
 part 'impl.dart';
 part 'schema.dart';
+part 'types.dart';
 
 /// Interface for objects that can be serialized to JSON.
 abstract interface class ToJson {
@@ -15,25 +20,22 @@ abstract interface class ToJson {
 /// A strongly-typed wrapper around a `Map<String, Object?>` for extracting
 /// and validating JSON fields.
 abstract interface class JsonObject {
-  const factory JsonObject(Map<String, Object?> map) = _JsonObjectImpl;
+  /// Wraps [map], whose values come from [source].
+  const factory JsonObject(Map<String, Object?> map, {JsonSource source}) =
+      _JsonObjectImpl;
 
   static Schema schema<T>(
     T Function(JsonObject json) mapper, {
     String? title,
     String? description,
-  }) {
-    final ctx = _SchemaContext();
-    final json = _SchemaJsonObject(ctx);
-    mapper(json);
-    return ctx.toSchema(title: title, description: description);
-  }
+  }) => _traceSchema(mapper, title: title, description: description);
 
   JsonFieldExtractor get field;
 
   /// Returns the top-level keys present in the JSON object.
   Iterable<String> get keys;
 
-  bool has(String key);
+  core.bool has(String key);
 
   T parse<T>(T Function(JsonObject json) mapper);
 
@@ -41,6 +43,12 @@ abstract interface class JsonObject {
     String key,
     Map<String, T Function(JsonObject json)> mappers,
   );
+
+  /// Extracts a required field by [key] and decodes it with [type].
+  T read<T>(String key, JsonType<T> type);
+
+  /// Extracts an optional field by [key] and decodes it with [type].
+  T? readOrNull<T>(String key, JsonType<T> type);
 
   Object any(String key);
 
@@ -53,23 +61,33 @@ abstract interface class JsonObject {
     List<ValidationRule<String>> rules = const [],
   });
 
-  int integer(String key, {List<ValidationRule<num>> rules = const []});
+  core.int int(String key, {List<ValidationRule<core.int>> rules = const []});
 
-  int? integerOrNull(
+  core.int? intOrNull(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.int>> rules = const [],
   });
 
-  double float(String key, {List<ValidationRule<num>> rules = const []});
-
-  double? floatOrNull(
+  core.double double(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.double>> rules = const [],
   });
 
-  bool boolean(String key);
+  core.double? doubleOrNull(
+    String key, {
+    List<ValidationRule<core.double>> rules = const [],
+  });
 
-  bool? booleanOrNull(String key);
+  core.num num(String key, {List<ValidationRule<core.num>> rules = const []});
+
+  core.num? numOrNull(
+    String key, {
+    List<ValidationRule<core.num>> rules = const [],
+  });
+
+  core.bool bool(String key);
+
+  core.bool? boolOrNull(String key);
 
   DateTime dateTime(
     String key, {
@@ -83,13 +101,13 @@ abstract interface class JsonObject {
 
   DateTime timestamp(
     String key, {
-    bool isSeconds = false,
+    core.bool isSeconds = false,
     List<ValidationRule<DateTime>> rules = const [],
   });
 
   DateTime? timestampOrNull(
     String key, {
-    bool isSeconds = false,
+    core.bool isSeconds = false,
     List<ValidationRule<DateTime>> rules = const [],
   });
 
@@ -113,29 +131,17 @@ abstract interface class JsonObject {
 
   T? objectOrNull<T>(String key, T Function(JsonObject json) mapper);
 
-  List<T> list<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  });
+  /// Extracts a required list by [key] whose items are [items].
+  List<T> list<T>(String key, JsonType<T> items);
 
-  List<T>? listOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  });
+  /// Extracts an optional list by [key] whose items are [items].
+  List<T>? listOrNull<T>(String key, JsonType<T> items);
 
-  Map<String, T> map<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  });
+  /// Extracts a required object by [key] whose values are [values].
+  Map<String, T> map<T>(String key, JsonType<T> values);
 
-  Map<String, T>? mapOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  });
+  /// Extracts an optional object by [key] whose values are [values].
+  Map<String, T>? mapOrNull<T>(String key, JsonType<T> values);
 }
 
 /// Represents a field in a JSON object that can be either absent or present
@@ -178,6 +184,18 @@ final class JsonFieldPresent<T> extends JsonField<T> {
 /// Helper class for extracting fields as [JsonField] wrappers.
 extension type const JsonFieldExtractor(JsonObject _json) {
   @pragma('vm:prefer-inline')
+  JsonField<T> read<T>(String key, JsonType<T> type) {
+    if (!_json.has(key)) return const .absent();
+    return .present(_json.read(key, type));
+  }
+
+  @pragma('vm:prefer-inline')
+  JsonField<T?> readOrNull<T>(String key, JsonType<T> type) {
+    if (!_json.has(key)) return const .absent();
+    return .present(_json.readOrNull(key, type));
+  }
+
+  @pragma('vm:prefer-inline')
   JsonField<String> string(
     String key, {
     List<ValidationRule<String>> rules = const [],
@@ -196,51 +214,69 @@ extension type const JsonFieldExtractor(JsonObject _json) {
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<int> integer(
+  JsonField<core.int> int(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.int>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.integer(key, rules: rules));
+    return .present(_json.int(key, rules: rules));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<int?> integerOrNull(
+  JsonField<core.int?> intOrNull(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.int>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.integerOrNull(key, rules: rules));
+    return .present(_json.intOrNull(key, rules: rules));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<double> float(
+  JsonField<core.double> double(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.double>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.float(key, rules: rules));
+    return .present(_json.double(key, rules: rules));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<double?> floatOrNull(
+  JsonField<core.double?> doubleOrNull(
     String key, {
-    List<ValidationRule<num>> rules = const [],
+    List<ValidationRule<core.double>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.floatOrNull(key, rules: rules));
+    return .present(_json.doubleOrNull(key, rules: rules));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<bool> boolean(String key) {
+  JsonField<core.num> num(
+    String key, {
+    List<ValidationRule<core.num>> rules = const [],
+  }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.boolean(key));
+    return .present(_json.num(key, rules: rules));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<bool?> booleanOrNull(String key) {
+  JsonField<core.num?> numOrNull(
+    String key, {
+    List<ValidationRule<core.num>> rules = const [],
+  }) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.booleanOrNull(key));
+    return .present(_json.numOrNull(key, rules: rules));
+  }
+
+  @pragma('vm:prefer-inline')
+  JsonField<core.bool> bool(String key) {
+    if (!_json.has(key)) return const .absent();
+    return .present(_json.bool(key));
+  }
+
+  @pragma('vm:prefer-inline')
+  JsonField<core.bool?> boolOrNull(String key) {
+    if (!_json.has(key)) return const .absent();
+    return .present(_json.boolOrNull(key));
   }
 
   @pragma('vm:prefer-inline')
@@ -264,7 +300,7 @@ extension type const JsonFieldExtractor(JsonObject _json) {
   @pragma('vm:prefer-inline')
   JsonField<DateTime> timestamp(
     String key, {
-    bool isSeconds = false,
+    core.bool isSeconds = false,
     List<ValidationRule<DateTime>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
@@ -276,7 +312,7 @@ extension type const JsonFieldExtractor(JsonObject _json) {
   @pragma('vm:prefer-inline')
   JsonField<DateTime?> timestampOrNull(
     String key, {
-    bool isSeconds = false,
+    core.bool isSeconds = false,
     List<ValidationRule<DateTime>> rules = const [],
   }) {
     if (!_json.has(key)) return const .absent();
@@ -339,43 +375,27 @@ extension type const JsonFieldExtractor(JsonObject _json) {
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<List<T>> list<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
+  JsonField<List<T>> list<T>(String key, JsonType<T> items) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.list<T>(key, mapper: mapper, rules: rules));
+    return .present(_json.list(key, items));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<List<T>?> listOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
+  JsonField<List<T>?> listOrNull<T>(String key, JsonType<T> items) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.listOrNull<T>(key, mapper: mapper, rules: rules));
+    return .present(_json.listOrNull(key, items));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<Map<String, T>> map<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
+  JsonField<Map<String, T>> map<T>(String key, JsonType<T> values) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.map<T>(key, mapper: mapper, rules: rules));
+    return .present(_json.map(key, values));
   }
 
   @pragma('vm:prefer-inline')
-  JsonField<Map<String, T>?> mapOrNull<T>(
-    String key, {
-    T Function(JsonObject json)? mapper,
-    List<ValidationRule<T>> rules = const [],
-  }) {
+  JsonField<Map<String, T>?> mapOrNull<T>(String key, JsonType<T> values) {
     if (!_json.has(key)) return const .absent();
-    return .present(_json.mapOrNull<T>(key, mapper: mapper, rules: rules));
+    return .present(_json.mapOrNull(key, values));
   }
 
   @pragma('vm:prefer-inline')

@@ -31,18 +31,19 @@ class ValidationError extends Equatable implements ToJson {
     return ValidationError(
       code: json.string('code'),
       message: json.stringOrNull('message'),
-      params: json.mapOrNull<Object?>('params') ?? const {},
+      params: json.mapOrNull('params', JsonType.any.orNull) ?? const {},
     );
   }
 
+  /// The JSON Schema type name of [obj], the vocabulary of `expected` too.
   static String _getTypeName(Object? obj) {
     if (obj == null) return 'null';
     if (obj is String) return 'string';
-    if (obj is int) return 'int';
-    if (obj is double) return 'double';
-    if (obj is bool) return 'bool';
-    if (obj is List) return 'list';
-    if (obj is Map) return 'map';
+    if (obj is int) return 'integer';
+    if (obj is num) return 'number';
+    if (obj is bool) return 'boolean';
+    if (obj is List) return 'array';
+    if (obj is Map) return 'object';
     return obj.runtimeType.toString().toLowerCase();
   }
 
@@ -80,10 +81,7 @@ class ValidationErrors implements Exception, ToJson {
   factory ValidationErrors.fromJson(JsonObject json) {
     final errors = <String, List<ValidationError>>{};
     for (final key in json.keys) {
-      errors[key] = json.list<ValidationError>(
-        key,
-        mapper: ValidationError.fromJson,
-      );
+      errors[key] = json.list(key, .object(ValidationError.fromJson));
     }
     return ValidationErrors(errors);
   }
@@ -144,20 +142,6 @@ extension ValidationRulesExtensions<T> on List<ValidationRule<T>> {
     }
     return errors ?? const [];
   }
-
-  /// Evaluates all rules against [value] for field [key].
-  /// Throws [ValidationErrors] containing ALL failed rule errors.
-  @pragma('vm:prefer-inline')
-  void validate(String key, T value) {
-    final failed = evaluate(value);
-    if (failed.isNotEmpty) {
-      final container = ValidationErrors();
-      for (final err in failed) {
-        container.add(key, err);
-      }
-      throw container;
-    }
-  }
 }
 
 /// Interface for validation rules.
@@ -187,14 +171,14 @@ abstract interface class ValidationRule<T> {
   }
 
   /// Numeric range rule (min, max, exclusiveMin, exclusiveMax).
-  static ValidationRule<num> range({
+  static ValidationRule<T> range<T extends num>({
     num? min,
     num? max,
     num? exclusiveMin,
     num? exclusiveMax,
     String? message,
   }) {
-    return RangeValidationRule(
+    return RangeValidationRule<T>(
       min: min,
       max: max,
       exclusiveMin: exclusiveMin,
@@ -308,7 +292,7 @@ class LengthValidationRule implements ValidationRule<String> {
   }
 }
 
-class RangeValidationRule implements ValidationRule<num> {
+class RangeValidationRule<T extends num> implements ValidationRule<T> {
   const RangeValidationRule({
     this.min,
     this.max,
@@ -325,7 +309,7 @@ class RangeValidationRule implements ValidationRule<num> {
 
   @override
   @pragma('vm:prefer-inline')
-  ValidationError? validate(num value) {
+  ValidationError? validate(T value) {
     if (min != null && value < min!) {
       return ValidationError(
         code: 'range',

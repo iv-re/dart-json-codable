@@ -9,11 +9,11 @@ void main() {
     test('generates basic object schema', () {
       final dynamic schema = JsonObject.schema(
         (j) => {
-          'id': j.integer('id'),
+          'id': j.int('id'),
           'name': j.string('name'),
-          'isActive': j.boolean('isActive'),
+          'isActive': j.bool('isActive'),
           'tag': j.any('tag'),
-          'score': j.float('score'),
+          'score': j.double('score'),
           'createdAt': j.dateTime('createdAt'),
         },
         title: 'User',
@@ -51,11 +51,11 @@ void main() {
 
     test('generates schema with optional fields', () {
       final dynamic schema = JsonObject.schema((j) {
-        j.integerOrNull('id');
+        j.intOrNull('id');
         j.stringOrNull('name');
-        j.booleanOrNull('isActive');
+        j.boolOrNull('isActive');
         j.anyOrNull('tag');
-        j.floatOrNull('score');
+        j.doubleOrNull('score');
         j.dateTimeOrNull('createdAt');
       });
 
@@ -101,8 +101,8 @@ void main() {
 
     test('generates schema constraints from validation rules (number)', () {
       final dynamic schema = JsonObject.schema((j) {
-        j.integer('age', rules: [ValidationRule.range(min: 18, max: 100)]);
-        j.float(
+        j.int('age', rules: [ValidationRule.range(min: 18, max: 100)]);
+        j.double(
           'score',
           rules: [
             ValidationRule.range(exclusiveMin: 0, exclusiveMax: 10),
@@ -153,17 +153,9 @@ void main() {
 
     test('generates schema with arrays', () {
       final dynamic schema = JsonObject.schema((j) {
-        j.list('tags', mapper: (j) => j.string(r'$'));
-        j.listOrNull('counts', mapper: (j) => j.integer(r'$'));
-        j.list(
-          'users',
-          mapper: (j) => j.object(
-            r'$',
-            (j) => {
-              'id': j.integer('id'),
-            },
-          ),
-        );
+        j.list('tags', .string.where([.length(min: 2)]));
+        j.listOrNull('counts', .int);
+        j.list('users', .object((j) => {'id': j.int('id')}));
       });
 
       check(schema['required'] as List).deepEquals(['tags', 'users']);
@@ -171,6 +163,7 @@ void main() {
       final tags = schema['properties']['tags'];
       check(tags['type']).equals('array');
       check(tags['items']['type']).equals('string');
+      check(tags['items']['minLength']).equals(2);
 
       final counts = schema['properties']['counts'];
       check(counts['type']).equals('array');
@@ -182,10 +175,27 @@ void main() {
       check((users['items']['properties'] as Map).keys).deepEquals(['id']);
     });
 
+    test(r'describes the root value with the $ key', () {
+      final dynamic schema = JsonObject.schema((j) => j.list(r'$', .int));
+
+      check(schema['type']).equals('array');
+      check(schema['items']['type']).equals('integer');
+    });
+
+    test('keeps fields traced before the mapper throws', () {
+      final dynamic schema = JsonObject.schema((j) {
+        final email = _Email(j.string('email'));
+        return (email, j.string('name'));
+      });
+
+      // The placeholder email is rejected, so `name` is never read.
+      check((schema['properties'] as Map).keys).deepEquals(['email']);
+    });
+
     test('generates schema through JsonFieldExtractor', () {
       final dynamic schema = JsonObject.schema((j) {
         j.field.string('name');
-        j.field.integerOrNull('age');
+        j.field.intOrNull('age');
       });
 
       check(schema['required'] as List).deepEquals(['name']);
@@ -202,25 +212,15 @@ void main() {
         j.timestampOrNull('updatedAt');
         j.uri('website');
         j.uriOrNull('avatarUrl');
-        j.map('metadata', mapper: (j) => j.string(r'$'));
-        j.mapOrNull(
-          'stats',
-          mapper: (j) => j.object(
-            r'$',
-            (j) => {
-              'count': j.integer('count'),
-            },
-          ),
-        );
-        j.map<String>('primitiveMap');
-        j.map<Object>('anyMap');
+        j.map('metadata', .string);
+        j.mapOrNull('stats', .object((j) => {'count': j.int('count')}));
+        j.map('anyMap', .any);
       });
 
       check(schema['required'] as Iterable<Object?>).unorderedEquals([
         'createdAt',
         'website',
         'metadata',
-        'primitiveMap',
         'anyMap',
       ]);
 
@@ -244,10 +244,6 @@ void main() {
         stats['additionalProperties']['properties']['count']['type'],
       ).equals('integer');
 
-      final primitiveMap = schema['properties']['primitiveMap'];
-      check(primitiveMap['type']).equals('object');
-      check(primitiveMap['additionalProperties']['type']).equals('string');
-
       final anyMap = schema['properties']['anyMap'];
       check(anyMap['type']).equals('object');
       check(anyMap['additionalProperties'] as Map).deepEquals({});
@@ -258,7 +254,7 @@ void main() {
         j.string('base_field');
         j.discriminated('type', {
           'doc': (j) => j.string('doc_id'),
-          'video': (j) => j.integer('duration'),
+          'video': (j) => j.int('duration'),
         });
       });
 
@@ -294,7 +290,7 @@ void main() {
       final dynamic schema = JsonObject.schema((j) {
         j.list(
           'items',
-          mapper: (itemJson) => itemJson.discriminated('kind', {
+          .discriminated('kind', {
             'text': (j) => j.string('text'),
             'image': (j) => j.string('url'),
           }),
@@ -332,7 +328,7 @@ void main() {
           'payload',
           (childJson) => childJson.discriminated('event', {
             'click': (j) => j.string('target'),
-            'hover': (j) => j.integer('duration'),
+            'hover': (j) => j.int('duration'),
           }),
         );
       });
@@ -355,9 +351,9 @@ void main() {
       final dynamic schema = JsonObject.schema((j) {
         j.map(
           'by_id',
-          mapper: (childJson) => childJson.discriminated('type', {
+          .discriminated('type', {
             'a': (j) => j.string('name'),
-            'b': (j) => j.boolean('flag'),
+            'b': (j) => j.bool('flag'),
           }),
         );
       });
@@ -404,3 +400,11 @@ void main() {
 }
 
 enum _Role { admin, user, guest }
+
+class _Email {
+  _Email(this.value) {
+    if (!value.contains('@')) throw ArgumentError.value(value, 'value');
+  }
+
+  final String value;
+}

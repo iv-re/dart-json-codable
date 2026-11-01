@@ -16,7 +16,7 @@ class CreateUserDto {
   CreateUserDto.fromJson(JsonObject json)
       : name = json.string('name', rules: [.length(min: 2)]),
         email = json.string('email', rules: [.email()]),
-        age = json.integerOrNull('age', rules: [.range(min: 18)]);
+        age = json.intOrNull('age', rules: [.range(min: 18)]);
 
   final String name;
   final String email;
@@ -41,6 +41,63 @@ try {
   print(error.toJson()); // Contains only the first error ('name')
 }
 ```
+
+### Collections
+
+Lists and maps take the type of their items as a `JsonType`:
+
+```dart
+final ids = json.list('ids', .int);
+final tags = json.list('tags', .string.where([.length(min: 2)]));
+final users = json.list('users', .object(UserDto.fromJson));
+final files = json.list('files', .discriminated('type', {
+  'doc': DocDto.fromJson,
+  'video': VideoDto.fromJson,
+}));
+final labels = json.mapOrNull('labels', .string);
+```
+
+Item errors are reported at the item path, such as `users.1.email`.
+
+### Custom Types
+
+`JsonType.convert` turns a type into your own. Custom types get validation
+errors, schema generation and `json.field` support like the built-in ones:
+
+```dart
+final userId = JsonType.string.convert(
+  (value, reader) =>
+      UserId.tryParse(value) ?? reader.fail(const .new(code: 'user_id')),
+  placeholder: UserId.empty,
+  schema: Schema.string(format: 'uuid'),
+);
+
+final id = json.read('id', userId);
+final ids = json.list('ids', userId);
+```
+
+`placeholder` is what a failed read returns, so that `parse` can go on and
+collect the errors of the remaining fields.
+
+### Text Sources
+
+Query parameters, form fields and headers arrive as strings. Wrap them with
+`JsonSource.text` and each getter converts the string to the type it reads:
+
+```dart
+final query = JsonObject(
+  {'page': '2', 'q': '007', 'ids': '5'},
+  source: .text,
+);
+
+query.int('page'); // 2
+query.string('q'); // '007'
+query.list('ids', .int); // [5]
+```
+
+Numbers must be decimal, booleans are `true` or `false`, an empty value counts
+as absent for every type except string, and a single value is accepted where a
+list is expected.
 
 ### Serialization (`ToJson`)
 
